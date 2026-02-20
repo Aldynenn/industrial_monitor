@@ -1,0 +1,9 @@
+[project]
+name = "industrial-monitor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "python-snap7>=2.0.2",
+]
