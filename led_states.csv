@@ -1,0 +1,11 @@
+el01;Bool;0.0;false
+el02;Bool;0.1;false
+el03;Bool;0.2;false
+el04;Bool;0.3;false
+el05;Bool;0.4;false
+el06;Bool;0.5;false
+el07;Bool;0.6;false
+el08;Bool;0.7;false
+eoff_signal;Bool;1.0;false
+etimer_duration;Time;2.0;T#100ms
+btn_green;Bool;6.0;false
