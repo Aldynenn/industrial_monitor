@@ -12,45 +12,52 @@ from PyQt6.QtWidgets import (
     QLabel,
     QGroupBox,
     QTextEdit,
+    QSystemTrayIcon,
 )
 from PyQt6.QtCore import pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
+import config
+from data_broker import DataBroker
 from plc_communication import PLCWorker
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Industrial Monitor")
         self.setMinimumWidth(480)
-        self.worker: PLCWorker | None = None
+
+        self._force_quit = False
+        self._tray = None
+        self.worker = None
+        self.broker = DataBroker(self)
+        self.broker.data_updated.connect(self._on_data)
 
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
 
-        # ── Connection settings ──────────────────────────────
+        # -------------------- Connection settings --------------------
         conn_group = QGroupBox("PLC Connection")
         form = QFormLayout()
 
-        self.ip_input = QLineEdit("192.168.0.27")
-        self.ip_input.setPlaceholderText("e.g. 192.168.0.27")
+        self.ip_input = QLineEdit(config.DEFAULT_IP_ADDRESS)
+        self.ip_input.setPlaceholderText("e.g. 192.168.0.1")
         form.addRow("PLC IP:", self.ip_input)
 
         self.rack_input = QSpinBox()
         self.rack_input.setRange(0, 7)
-        self.rack_input.setValue(0)
+        self.rack_input.setValue(config.DEFAULT_RACK_NUMBER)
         form.addRow("Rack:", self.rack_input)
 
         self.slot_input = QSpinBox()
         self.slot_input.setRange(0, 31)
-        self.slot_input.setValue(1)
+        self.slot_input.setValue(config.DEFAULT_SLOT_NUMBER)
         form.addRow("Slot:", self.slot_input)
 
         conn_group.setLayout(form)
         layout.addWidget(conn_group)
 
-        # ── Start / Stop button ──────────────────────────────
+        # -------------------- Start / Stop button --------------------
         btn_layout = QHBoxLayout()
         self.start_stop_btn = QPushButton("Start")
         self.start_stop_btn.setCheckable(True)
@@ -59,11 +66,11 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.start_stop_btn)
         layout.addLayout(btn_layout)
 
-        # ── Status label ─────────────────────────────────────
+        # -------------------- Status label --------------------
         self.status_label = QLabel("Status: Idle")
         layout.addWidget(self.status_label)
 
-        # ── Data display ─────────────────────────────────────
+        # -------------------- Data display --------------------
         data_group = QGroupBox("PLC Data")
         data_layout = QVBoxLayout()
         self.data_display = QTextEdit()
@@ -73,7 +80,7 @@ class MainWindow(QMainWindow):
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
 
-    # ── Slots ────────────────────────────────────────────────
+    # -------------------- Slots --------------------
 
     def _on_start_stop(self, checked: bool):
         if checked:
@@ -96,8 +103,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Status: Connecting...")
         self.data_display.clear()
 
-        self.worker = PLCWorker(ip, rack, slot)
-        self.worker.data_received.connect(self._on_data)
+        self.worker = PLCWorker(ip, rack, slot, broker=self.broker)
         self.worker.error_occurred.connect(self._on_error)
         self.worker.connected.connect(self._on_connected)
         self.worker.disconnected.connect(self._on_disconnected)
@@ -106,8 +112,9 @@ class MainWindow(QMainWindow):
 
     def _stop_polling(self):
         self.status_label.setText("Status: Stopping...")
-        if self.worker:
+        if self.worker is not None:
             self.worker.stop()
+            self.worker.wait(3000)
 
     @pyqtSlot(dict)
     def _on_data(self, data: dict):
@@ -116,14 +123,14 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def _on_error(self, msg: str):
-        self.status_label.setText(f"Status: Error – {msg}")
+        self.status_label.setText(f"Status: Error - {msg}")
         self.start_stop_btn.setChecked(False)
         self.start_stop_btn.setText("Start")
         self._set_inputs_enabled(True)
 
     @pyqtSlot()
     def _on_connected(self):
-        self.status_label.setText("Status: Connected – gathering data")
+        self.status_label.setText("Status: Connected - gathering data")
 
     @pyqtSlot()
     def _on_disconnected(self):
@@ -134,7 +141,6 @@ class MainWindow(QMainWindow):
         self.start_stop_btn.setChecked(False)
         self.start_stop_btn.setText("Start")
         self._set_inputs_enabled(True)
-        self.worker = None
 
     def _set_inputs_enabled(self, enabled: bool):
         self.ip_input.setEnabled(enabled)
@@ -142,14 +148,18 @@ class MainWindow(QMainWindow):
         self.slot_input.setEnabled(enabled)
 
     def closeEvent(self, event):
-        if self.worker and self.worker.isRunning():
-            self.worker.stop()
-            self.worker.wait(3000)
-        event.accept()
-
-
-def launch():
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+        if not self._force_quit and self._tray and QSystemTrayIcon.isSystemTrayAvailable():
+            event.ignore()
+            self.hide()
+            self._tray.showMessage(
+                "Industrial Monitor",
+                "Running in the background. Right-click the tray icon to quit.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
+            )
+        else:
+            # Actually quit: stop worker, clean up
+            if self.worker is not None:
+                self.worker.stop()
+                self.worker.wait(3000)
+            event.accept()

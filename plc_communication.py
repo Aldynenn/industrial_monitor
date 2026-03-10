@@ -1,8 +1,7 @@
-from tracemalloc import start
-
 import snap7
-import struct
 from PyQt6.QtCore import QThread, pyqtSignal
+
+import config
 
 class PLCCommunication:
     connection_error = False
@@ -32,18 +31,18 @@ class PLCCommunication:
 class PLCWorker(QThread):
     """Worker thread that polls PLC data periodically."""
 
-    data_received = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
     connected = pyqtSignal()
     disconnected = pyqtSignal()
 
-    def __init__(self, ip: str, rack: int, slot: int):
+    def __init__(self, ip: str, rack: int, slot: int, broker=None):
         super().__init__()
         self.ip = ip
         self.rack = rack
         self.slot = slot
         self._running = False
         self.plc: PLCCommunication | None = None
+        self._broker = broker
 
     def run(self):
         try:
@@ -60,12 +59,13 @@ class PLCWorker(QThread):
         while self._running:
             try:
                 data = self._read_db_values()
-                self.data_received.emit(data)
+                if self._broker:
+                    self._broker.update(data)
             except Exception as e:
                 self.error_occurred.emit(str(e))
                 self._running = False
                 break
-            self.msleep(20)  # poll every 200 ms
+            self.msleep(config.POLLING_INTERVAL_MS)
 
         # cleanup
         try:
