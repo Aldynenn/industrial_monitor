@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QTextEdit,
     QSystemTrayIcon,
+    QMessageBox,
 )
 from PyQt6.QtCore import pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
@@ -149,14 +150,32 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if not self._force_quit and self._tray and QSystemTrayIcon.isSystemTrayAvailable():
-            event.ignore()
-            self.hide()
-            self._tray.showMessage(
-                "Industrial Monitor",
-                "Running in the background. Right-click the tray icon to quit.",
-                QSystemTrayIcon.MessageIcon.Information,
-                2000,
-            )
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Industrial Monitor")
+            msg.setText("What would you like to do?")
+            minimize_btn = msg.addButton("Minimize to tray", QMessageBox.ButtonRole.AcceptRole)
+            quit_btn = msg.addButton("Quit", QMessageBox.ButtonRole.DestructiveRole)
+            msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+
+            clicked = msg.clickedButton()
+            if clicked is minimize_btn:
+                event.ignore()
+                self.hide()
+                self._tray.showMessage(
+                    "Industrial Monitor",
+                    "Running in the background. Right-click the tray icon to quit.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    2000,
+                )
+            elif clicked is quit_btn:
+                if self.worker is not None:
+                    self.worker.stop()
+                    self.worker.wait(3000)
+                event.accept()
+                QApplication.quit()
+            else:
+                event.ignore()
         else:
             # Actually quit: stop worker, clean up
             if self.worker is not None:
