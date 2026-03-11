@@ -1,0 +1,302 @@
+:root {
+    --bg: #0f1117;
+    --card: #1a1d28;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --muted: #888;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --amber: #f59e0b;
+}
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 1.5rem;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+}
+
+h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+#connection-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+#connection-status .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    transition: background 100ms;
+}
+
+#connection-status.connected .dot {
+    background: var(--green);
+}
+
+.controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.controls label {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.controls input {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    width: 220px;
+}
+
+.controls button {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.45rem 1.2rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: opacity 100ms;
+}
+
+.controls button:hover {
+    opacity: 0.85;
+}
+
+.controls button.disconnect {
+    background: var(--red);
+}
+
+/* ---------- Datablock sections ---------- */
+.db-section {
+    margin-bottom: 2rem;
+}
+
+.db-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 1rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+}
+
+/* ---------- Bool grid ---------- */
+.bool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.bool-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 0.75rem;
+    text-align: center;
+    transition: border-color 100ms;
+}
+
+.bool-card.active {
+    border-color: var(--green);
+}
+
+.bool-card .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+}
+
+.bool-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.bool-value.is-true {
+    color: var(--green);
+}
+
+.bool-value.is-false {
+    color: var(--red);
+}
+
+/* ---------- Slider cards ---------- */
+.slider-grid {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.slider-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    min-width: 240px;
+    flex: 1;
+}
+
+.slider-card .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+}
+
+.data-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: #333;
+    outline: none;
+    cursor: default;
+}
+
+.data-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 2px solid var(--blue);
+}
+
+.data-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 2px solid var(--blue);
+}
+
+.slider-info {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+}
+
+.slider-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--blue);
+}
+
+.slider-sep {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.slider-max {
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
+
+/* ---------- Standalone numeric cards ---------- */
+.numeric-grid {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.numeric-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    min-width: 160px;
+}
+
+.numeric-card .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+}
+
+.numeric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--blue);
+}
+
+/* ---------- Log ---------- */
+    margin-top: 2rem;
+}
+
+.log-section h2 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--muted);
+}
+
+#log {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+#log .entry {
+    white-space: pre;
+}
+
+#log .entry.error {
+    color: var(--red);
+}
+
+#log .entry.info {
+    color: var(--blue);
+}
