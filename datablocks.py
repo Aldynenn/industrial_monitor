@@ -14,7 +14,15 @@ plc_datablocks = [
                 {"name": "el08", "type": "Bool", "byte_offset": 0, "bit_offset": 7},
                 {"name": "eoff_signal", "type": "Bool", "byte_offset": 1, "bit_offset": 0},
                 {"name": "etimer_duration", "type": "Time", "byte_offset": 2, "bit_offset": 0},
-                {"name": "btn_green", "type": "Bool", "byte_offset": 6, "bit_offset": 0}
+                {"name": "btn_green", "type": "Bool", "byte_offset": 6, "bit_offset": 0},
+                {"name": "il01", "type": "Bool", "byte_offset": 6, "bit_offset": 1},
+                {"name": "il02", "type": "Bool", "byte_offset": 6, "bit_offset": 2},
+                {"name": "il03", "type": "Bool", "byte_offset": 6, "bit_offset": 3},
+                {"name": "il04", "type": "Bool", "byte_offset": 6, "bit_offset": 4},
+                {"name": "il05", "type": "Bool", "byte_offset": 6, "bit_offset": 5},
+                {"name": "il06", "type": "Bool", "byte_offset": 6, "bit_offset": 6},
+                {"name": "il07", "type": "Bool", "byte_offset": 6, "bit_offset": 7},
+                {"name": "il08", "type": "Bool", "byte_offset": 7, "bit_offset": 0}
             ]
         }
     },
