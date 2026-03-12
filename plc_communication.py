@@ -32,6 +32,9 @@ class PLCCommunication:
         reading = self.plc.db_read(db_number, start_offset, 4)
         return snap7.util.get_dword(reading, 0)
 
+    def read_db_range(self, db_number, start, size):
+        return self.plc.db_read(db_number, start, size)
+
 
 class PLCWorker(QThread):
     """Worker thread that polls PLC data periodically."""
@@ -83,22 +86,34 @@ class PLCWorker(QThread):
     def stop(self):
         self._running = False
 
-    _type_readers = {
-        "Bool": lambda plc, db, field: plc.read_boolean(db, field["byte_offset"], field["bit_offset"]),
-        "Int": lambda plc, db, field: plc.read_int(db, field["byte_offset"]),
-        "Time": lambda plc, db, field: plc.read_time(db, field["byte_offset"]),
+    _type_sizes = {"Bool": 1, "Int": 2, "Time": 4}
+
+    _field_parsers = {
+        "Bool": lambda buf, field, base: snap7.util.get_bool(buf, field["byte_offset"] - base, field["bit_offset"]),
+        "Int": lambda buf, field, base: snap7.util.get_int(buf, field["byte_offset"] - base),
+        "Time": lambda buf, field, base: snap7.util.get_dword(buf, field["byte_offset"] - base),
     }
 
     def _read_db_values(self) -> dict:
-        """Read all datablock values defined in datablocks.py."""
+        """Read all datablock values defined in datablocks.py.
+
+        Each DB is read in a single db_read call covering the full byte range
+        of its fields, reducing network round-trips from one per field to one per DB.
+        """
         result = {}
         for block in plc_datablocks:
             db_number = block["db_number"]
             db_name = block["properties"]["name"]
+            fields = block["properties"]["data"]
+
+            start = min(f["byte_offset"] for f in fields)
+            end = max(f["byte_offset"] + self._type_sizes.get(f["type"], 1) for f in fields)
+            buf = self.plc.read_db_range(db_number, start, end - start)
+
             db_data = {}
-            for field in block["properties"]["data"]:
-                reader = self._type_readers.get(field["type"])
-                if reader:
-                    db_data[field["name"]] = reader(self.plc, db_number, field)
+            for field in fields:
+                parser = self._field_parsers.get(field["type"])
+                if parser:
+                    db_data[field["name"]] = parser(buf, field, start)
             result[db_name] = db_data
         return result
