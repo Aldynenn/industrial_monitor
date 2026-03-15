@@ -19,6 +19,7 @@ from PyQt6.QtCore import pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
 import config
 from data_broker import DataBroker
+from db_config_window import DbConfigWindow
 from plc_communication import PLCWorker
 
 class MainWindow(QMainWindow):
@@ -29,6 +30,7 @@ class MainWindow(QMainWindow):
 
         self._force_quit = False
         self._tray = None
+        self._db_config_window = None
         self.worker = None
         self.broker = DataBroker(self)
         self.broker.data_updated.connect(self._on_data)
@@ -65,6 +67,12 @@ class MainWindow(QMainWindow):
         self.start_stop_btn.setMinimumHeight(36)
         self.start_stop_btn.clicked.connect(self._on_start_stop)
         btn_layout.addWidget(self.start_stop_btn)
+
+        self.configure_dbs_btn = QPushButton("Configure DBs")
+        self.configure_dbs_btn.setMinimumHeight(36)
+        self.configure_dbs_btn.clicked.connect(self._open_db_config_window)
+        btn_layout.addWidget(self.configure_dbs_btn)
+
         layout.addLayout(btn_layout)
 
         # -------------------- Status label --------------------
@@ -147,6 +155,13 @@ class MainWindow(QMainWindow):
         self.ip_input.setEnabled(enabled)
         self.rack_input.setEnabled(enabled)
         self.slot_input.setEnabled(enabled)
+
+    def _open_db_config_window(self):
+        if self._db_config_window is None:
+            self._db_config_window = DbConfigWindow(self)
+        self._db_config_window.show()
+        self._db_config_window.raise_()
+        self._db_config_window.activateWindow()
 
     def closeEvent(self, event):
         if not self._force_quit and self._tray and QSystemTrayIcon.isSystemTrayAvailable():
