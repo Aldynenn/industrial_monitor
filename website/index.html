@@ -23,6 +23,15 @@
     <button id="connect-btn" onclick="toggleConnection()">Connect</button>
   </div>
 
+  <div class="controls auth-controls">
+    <label for="ws-username">Username</label>
+    <input id="ws-username" type="text" value="admin" />
+    <label for="ws-password">Password</label>
+    <input id="ws-password" type="password" value="admin" />
+    <button id="auth-btn" onclick="authenticateClient()">Authenticate</button>
+    <span id="auth-status" class="auth-status">Not authenticated</span>
+  </div>
+
   <div id="data-container"></div>
 
   <section class="log-section">

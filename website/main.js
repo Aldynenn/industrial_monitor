@@ -8,6 +8,7 @@ const SLIDER_PAIRS = {
 let ws = null;
 let messageCount = 0;
 let uiBuilt = false;
+let isAuthenticated = false;
 
 // ---------- WebSocket ----------
 function toggleConnection() {
@@ -27,15 +28,17 @@ function connect() {
 
     ws.addEventListener("open", () => {
         setConnected(true);
+        setAuthenticated(false, "Not authenticated");
         log("Connection established", "info");
         messageCount = 0;
+        authenticateClient();
     });
 
     ws.addEventListener("message", (event) => {
         messageCount++;
         try {
-            const data = JSON.parse(event.data);
-            updateUI(data);
+            const payload = JSON.parse(event.data);
+            handleMessage(payload);
         } catch (e) {
             log(`Bad message: ${e.message}`, "error");
         }
@@ -43,12 +46,76 @@ function connect() {
 
     ws.addEventListener("close", () => {
         setConnected(false);
+        setAuthenticated(false, "Not authenticated");
         log("Connection closed", "info");
     });
 
     ws.addEventListener("error", () => {
         log("WebSocket error", "error");
     });
+}
+
+function authenticateClient() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log("Connect first before authenticating", "error");
+        return;
+    }
+
+    const username = document.getElementById("ws-username").value.trim();
+    const password = document.getElementById("ws-password").value;
+    if (!username || !password) {
+        setAuthenticated(false, "Username/password required");
+        return;
+    }
+
+    ws.send(JSON.stringify({
+        type: "auth",
+        username,
+        password,
+    }));
+    log(`Auth request sent for '${username}'`, "info");
+}
+
+function handleMessage(payload) {
+    if (!payload || typeof payload !== "object") {
+        log("Ignored invalid message payload", "error");
+        return;
+    }
+
+    if (payload.type === "auth_required") {
+        log(payload.message || "Server requires authentication", "info");
+        return;
+    }
+
+    if (payload.type === "auth") {
+        if (payload.ok) {
+            setAuthenticated(true, "Authenticated");
+            log(payload.message || "Authentication successful", "info");
+        } else {
+            setAuthenticated(false, payload.message || "Authentication failed");
+            log(payload.message || "Authentication failed", "error");
+        }
+        return;
+    }
+
+    if (payload.type === "error") {
+        log(payload.message || "Server error", "error");
+        return;
+    }
+
+    if (payload.type === "plc_data") {
+        if (!isAuthenticated) {
+            log("Received data before authentication; ignoring", "error");
+            return;
+        }
+        updateUI(payload.data || {});
+        return;
+    }
+
+    // Backward compatibility for legacy server that sends raw data objects.
+    if (isAuthenticated) {
+        updateUI(payload);
+    }
 }
 
 // ---------- Build DOM dynamically from first message ----------
@@ -224,3 +291,15 @@ function log(msg, cls = "") {
     // Keep last 200 entries
     while (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
 }
+
+function setAuthenticated(ok, message) {
+    isAuthenticated = ok;
+    const el = document.getElementById("auth-status");
+    el.textContent = message || (ok ? "Authenticated" : "Not authenticated");
+    el.classList.remove("ok", "fail");
+    el.classList.add(ok ? "ok" : "fail");
+    document.getElementById("auth-btn").disabled = !ws || ws.readyState !== WebSocket.OPEN;
+    setConnected(ok);
+}
+
+setAuthenticated(false, "Not authenticated");

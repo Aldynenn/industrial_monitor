@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-# Test files
+# Other files
 temp.py
+datablocks_user.json
+*.db
+*.csv

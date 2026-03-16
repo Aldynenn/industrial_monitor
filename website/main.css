@@ -98,6 +98,29 @@ h1 {
     background: var(--red);
 }
 
+.auth-controls {
+    flex-wrap: wrap;
+    margin-top: -1rem;
+}
+
+#ws-password,
+#ws-username {
+    width: 180px;
+}
+
+.auth-status {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.auth-status.ok {
+    color: var(--green);
+}
+
+.auth-status.fail {
+    color: var(--red);
+}
+
 /* ---------- Datablock sections ---------- */
 .db-section {
     margin-bottom: 2rem;
@@ -266,6 +289,7 @@ h1 {
 }
 
 /* ---------- Log ---------- */
+.log-section {
     margin-top: 2rem;
 }
 

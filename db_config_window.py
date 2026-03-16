@@ -78,6 +78,14 @@ class DbConfigWindow(QWidget):
         self.var_log_input = QCheckBox("Log")
         controls.addWidget(self.var_log_input)
 
+        self.var_log_interval_input = QSpinBox()
+        self.var_log_interval_input.setRange(1, 3_600_000)
+        self.var_log_interval_input.setValue(1000)
+        self.var_log_interval_input.setSuffix(" ms")
+        self.var_log_interval_input.setEnabled(False)
+        controls.addWidget(self.var_log_interval_input)
+        self.var_log_input.toggled.connect(self.var_log_interval_input.setEnabled)
+
         self.var_byte_input = QSpinBox()
         self.var_byte_input.setRange(0, 65535)
         self.var_byte_input.setPrefix("Byte ")
@@ -98,8 +106,10 @@ class DbConfigWindow(QWidget):
 
         variable_layout.addLayout(controls)
 
-        self.variables_table = QTableWidget(0, 5)
-        self.variables_table.setHorizontalHeaderLabels(["Name", "Type", "Log", "Byte Offset", "Bit Offset"])
+        self.variables_table = QTableWidget(0, 6)
+        self.variables_table.setHorizontalHeaderLabels(
+            ["Name", "Type", "Log", "Log Interval (ms)", "Byte Offset", "Bit Offset"]
+        )
         self.variables_table.verticalHeader().setVisible(False)
         self.variables_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.variables_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -152,8 +162,9 @@ class DbConfigWindow(QWidget):
             self.variables_table.setItem(row, 0, QTableWidgetItem(field["name"]))
             self.variables_table.setItem(row, 1, QTableWidgetItem(field["type"]))
             self.variables_table.setItem(row, 2, QTableWidgetItem("Yes" if field.get("log", False) else "No"))
-            self.variables_table.setItem(row, 3, QTableWidgetItem(str(field["byte_offset"])))
-            self.variables_table.setItem(row, 4, QTableWidgetItem(str(field["bit_offset"])))
+            self.variables_table.setItem(row, 3, QTableWidgetItem(str(max(1, int(field.get("log_interval_ms", 1000))))))
+            self.variables_table.setItem(row, 4, QTableWidgetItem(str(field["byte_offset"])))
+            self.variables_table.setItem(row, 5, QTableWidgetItem(str(field["bit_offset"])))
 
     def _occupied_cells(self, variable: dict) -> set[tuple[int, int]]:
         var_type = variable["type"]
@@ -212,6 +223,8 @@ class DbConfigWindow(QWidget):
         self.var_name_input.clear()
         self.var_type_input.setCurrentIndex(0)
         self.var_log_input.setChecked(False)
+        self.var_log_interval_input.setValue(1000)
+        self.var_log_interval_input.setEnabled(False)
         self.var_byte_input.setValue(0)
         self.var_bit_input.setValue(0)
         self._variables.clear()
@@ -252,6 +265,7 @@ class DbConfigWindow(QWidget):
                 "name": field.get("name", ""),
                 "type": field.get("type", "Bool"),
                 "log": bool(field.get("log", False)),
+                "log_interval_ms": max(1, int(field.get("log_interval_ms", 1000))),
             }
             for field in raw_fields
             if field.get("name")
@@ -269,6 +283,7 @@ class DbConfigWindow(QWidget):
                     "name": field["name"],
                     "type": field["type"],
                     "log": bool(field.get("log", False)),
+                    "log_interval_ms": max(1, int(field.get("log_interval_ms", 1000))),
                     "byte_offset": int(field.get("byte_offset", 0)),
                     "bit_offset": int(field.get("bit_offset", 0)),
                 }
@@ -289,6 +304,8 @@ class DbConfigWindow(QWidget):
         self.var_name_input.setText(variable["name"])
         self.var_type_input.setCurrentText(variable["type"])
         self.var_log_input.setChecked(bool(variable.get("log", False)))
+        self.var_log_interval_input.setValue(max(1, int(variable.get("log_interval_ms", 1000))))
+        self.var_log_interval_input.setEnabled(bool(variable.get("log", False)))
         self.var_byte_input.setValue(int(variable.get("byte_offset", 0)))
         self.var_bit_input.setValue(int(variable.get("bit_offset", 0)))
 
@@ -296,6 +313,7 @@ class DbConfigWindow(QWidget):
         var_name = self.var_name_input.text().strip()
         var_type = self.var_type_input.currentText()
         var_log = self.var_log_input.isChecked()
+        var_log_interval_ms = self.var_log_interval_input.value()
         byte_offset = self.var_byte_input.value()
         bit_offset = self.var_bit_input.value()
 
@@ -311,6 +329,7 @@ class DbConfigWindow(QWidget):
             "name": var_name,
             "type": var_type,
             "log": var_log,
+            "log_interval_ms": var_log_interval_ms,
             "byte_offset": byte_offset,
             "bit_offset": bit_offset,
         }
@@ -322,6 +341,8 @@ class DbConfigWindow(QWidget):
         self._variables.append(candidate)
         self.var_name_input.clear()
         self.var_log_input.setChecked(False)
+        self.var_log_interval_input.setValue(1000)
+        self.var_log_interval_input.setEnabled(False)
         self._selected_var_index = None
         self._refresh_variables_table()
 
@@ -333,6 +354,7 @@ class DbConfigWindow(QWidget):
         var_name = self.var_name_input.text().strip()
         var_type = self.var_type_input.currentText()
         var_log = self.var_log_input.isChecked()
+        var_log_interval_ms = self.var_log_interval_input.value()
         byte_offset = self.var_byte_input.value()
         bit_offset = self.var_bit_input.value()
 
@@ -349,6 +371,7 @@ class DbConfigWindow(QWidget):
             "name": var_name,
             "type": var_type,
             "log": var_log,
+            "log_interval_ms": var_log_interval_ms,
             "byte_offset": byte_offset,
             "bit_offset": bit_offset,
         }
@@ -371,6 +394,8 @@ class DbConfigWindow(QWidget):
         self._selected_var_index = None
         self.var_name_input.clear()
         self.var_log_input.setChecked(False)
+        self.var_log_interval_input.setValue(1000)
+        self.var_log_interval_input.setEnabled(False)
         self.var_byte_input.setValue(0)
         self.var_bit_input.setValue(0)
         self._refresh_variables_table()
@@ -380,6 +405,8 @@ class DbConfigWindow(QWidget):
         self._selected_var_index = None
         self.var_name_input.clear()
         self.var_log_input.setChecked(False)
+        self.var_log_interval_input.setValue(1000)
+        self.var_log_interval_input.setEnabled(False)
         self.var_byte_input.setValue(0)
         self.var_bit_input.setValue(0)
         self._refresh_variables_table()
@@ -411,6 +438,7 @@ class DbConfigWindow(QWidget):
                 "name": item["name"],
                 "type": item["type"],
                 "log": bool(item.get("log", False)),
+                "log_interval_ms": max(1, int(item.get("log_interval_ms", 1000))),
                 "byte_offset": int(item["byte_offset"]),
                 "bit_offset": int(item["bit_offset"]),
             }

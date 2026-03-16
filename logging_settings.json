@@ -1,0 +1,5 @@
+{
+  "enabled": true,
+  "output_file": "plc_logs.csv",
+  "include_header": true
+}

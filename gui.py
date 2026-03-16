@@ -1,4 +1,3 @@
-import sys
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -15,15 +14,20 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QMessageBox,
 )
-from PyQt6.QtCore import pyqtSlot, QTimer
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtGui import QFont
+from client_auth import ClientAuthStore
+from client_manager_window import ClientManagerWindow
 import config
 from data_broker import DataBroker
 from db_config_window import DbConfigWindow
+from logging_config import LoggingSettingsStore
+from logging_settings_window import LoggingSettingsWindow
 from plc_communication import PLCWorker
+from plc_data_logger import PLCDataLogger
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, auth_store: ClientAuthStore, logging_settings_store: LoggingSettingsStore):
         super().__init__()
         self.setWindowTitle("Industrial Monitor")
         self.setMinimumWidth(480)
@@ -31,9 +35,14 @@ class MainWindow(QMainWindow):
         self._force_quit = False
         self._tray = None
         self._db_config_window = None
+        self._client_manager_window = None
+        self._logging_settings_window = None
         self.worker = None
+        self._auth_store = auth_store
+        self._logging_settings_store = logging_settings_store
         self.broker = DataBroker(self)
         self.broker.data_updated.connect(self._on_data)
+        self._data_logger = PLCDataLogger(self.broker, self._logging_settings_store, self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -72,6 +81,16 @@ class MainWindow(QMainWindow):
         self.configure_dbs_btn.setMinimumHeight(36)
         self.configure_dbs_btn.clicked.connect(self._open_db_config_window)
         btn_layout.addWidget(self.configure_dbs_btn)
+
+        self.manage_clients_btn = QPushButton("Manage Clients")
+        self.manage_clients_btn.setMinimumHeight(36)
+        self.manage_clients_btn.clicked.connect(self._open_client_manager_window)
+        btn_layout.addWidget(self.manage_clients_btn)
+
+        self.logging_settings_btn = QPushButton("Logging Settings")
+        self.logging_settings_btn.setMinimumHeight(36)
+        self.logging_settings_btn.clicked.connect(self._open_logging_settings_window)
+        btn_layout.addWidget(self.logging_settings_btn)
 
         layout.addLayout(btn_layout)
 
@@ -162,6 +181,20 @@ class MainWindow(QMainWindow):
         self._db_config_window.show()
         self._db_config_window.raise_()
         self._db_config_window.activateWindow()
+
+    def _open_client_manager_window(self):
+        if self._client_manager_window is None:
+            self._client_manager_window = ClientManagerWindow(self._auth_store, self)
+        self._client_manager_window.show()
+        self._client_manager_window.raise_()
+        self._client_manager_window.activateWindow()
+
+    def _open_logging_settings_window(self):
+        if self._logging_settings_window is None:
+            self._logging_settings_window = LoggingSettingsWindow(self._logging_settings_store, self)
+        self._logging_settings_window.show()
+        self._logging_settings_window.raise_()
+        self._logging_settings_window.activateWindow()
 
     def closeEvent(self, event):
         if not self._force_quit and self._tray and QSystemTrayIcon.isSystemTrayAvailable():
