@@ -3,35 +3,23 @@ import struct
 from PyQt6.QtCore import QThread, pyqtSignal
 
 import config
-from datablocks import plc_datablocks
+from datablocks import TYPE_SIZES, plc_datablocks
 
 class PLCCommunication:
-    connection_error = False
+    is_connected = False
 
     def __init__(self, ip_address, rack, slot):
         self.plc = snap7.client.Client()
         try:
             self.plc.connect(ip_address, rack, slot)
-            self.connection_error = self.plc.get_connected()
-            print(f"Connected to PLC: {self.connection_error}")
+            self.is_connected = self.plc.get_connected()
+            print(f"Connected to PLC: {self.is_connected}")
         except Exception as e:
             print(f"Error connecting to PLC: {e}")
-            self.connection_error = True
+            self.is_connected = False
 
     def disconnect(self):
         self.plc.disconnect()
-
-    def read_boolean(self, db_number, start_offset, bit_offset):
-        reading = self.plc.db_read(db_number, start_offset, 1)
-        return snap7.util.get_bool(reading, 0, bit_offset)
-
-    def read_int(self, db_number, start_offset):
-        reading = self.plc.db_read(db_number, start_offset, 2)
-        return snap7.util.get_int(reading, 0)
-
-    def read_time(self, db_number, start_offset):
-        reading = self.plc.db_read(db_number, start_offset, 4)
-        return snap7.util.get_dword(reading, 0)
 
     def read_db_range(self, db_number, start, size):
         return self.plc.db_read(db_number, start, size)
@@ -56,7 +44,7 @@ class PLCWorker(QThread):
     def run(self):
         try:
             self.plc = PLCCommunication(self.ip, self.rack, self.slot)
-            if self.plc.connection_error and not self.plc.plc.get_connected():
+            if not self.plc.is_connected:
                 self.error_occurred.emit("Failed to connect to PLC.")
                 return
             self.connected.emit()
@@ -86,22 +74,6 @@ class PLCWorker(QThread):
 
     def stop(self):
         self._running = False
-
-    _type_sizes = {
-        "Bool": 1,
-        "Byte": 1,
-        "SInt": 1,
-        "USInt": 1,
-        "Word": 2,
-        "Int": 2,
-        "UInt": 2,
-        "DWord": 4,
-        "DInt": 4,
-        "UDInt": 4,
-        "Real": 4,
-        "LReal": 8,
-        "Time": 4,
-    }
 
     @staticmethod
     def _parse_field_value(buf: bytes, field: dict, base: int):
@@ -151,7 +123,7 @@ class PLCWorker(QThread):
             fields = block["properties"]["data"]
 
             start = min(f["byte_offset"] for f in fields)
-            end = max(f["byte_offset"] + self._type_sizes.get(f["type"], 1) for f in fields)
+            end = max(f["byte_offset"] + TYPE_SIZES.get(f["type"], 1) for f in fields)
             buf = self.plc.read_db_range(db_number, start, end - start)
 
             db_data = {}

@@ -19,40 +19,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from datablocks import calculate_offsets, plc_datablocks, save_plc_datablocks
+from datablocks import TYPE_SIZES, calculate_offsets, plc_datablocks, save_plc_datablocks
 
 
-TYPE_SIZES = {
-    "Bool": 1,
-    "Byte": 1,
-    "SInt": 1,
-    "USInt": 1,
-    "Word": 2,
-    "Int": 2,
-    "UInt": 2,
-    "DWord": 4,
-    "DInt": 4,
-    "UDInt": 4,
-    "Real": 4,
-    "LReal": 8,
-    "Time": 4,
-}
-
-SUPPORTED_TYPES = [
-    "Bool",
-    "Byte",
-    "SInt",
-    "USInt",
-    "Word",
-    "Int",
-    "UInt",
-    "DWord",
-    "DInt",
-    "UDInt",
-    "Real",
-    "LReal",
-    "Time",
-]
+SUPPORTED_TYPES = list(TYPE_SIZES.keys())
 
 
 class DbConfigWindow(QWidget):

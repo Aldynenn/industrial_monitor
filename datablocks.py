@@ -104,8 +104,6 @@ def load_plc_datablocks() -> None:
     if isinstance(loaded, list):
         plc_datablocks.clear()
         plc_datablocks.extend(loaded)
-        _ensure_log_flags(plc_datablocks)
-
 
     _ensure_log_flags(plc_datablocks)
 

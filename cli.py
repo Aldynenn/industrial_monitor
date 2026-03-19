@@ -104,7 +104,6 @@ def handle_run(args: argparse.Namespace) -> None:
     """Start PLC polling + WebSocket server without a GUI."""
     from PyQt6.QtCore import QCoreApplication, QTimer
 
-    from client_auth import ClientAuthStore
     from data_broker import DataBroker
     from logging_config import LoggingSettingsStore
     from plc_communication import PLCWorker
