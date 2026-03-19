@@ -1,14 +1,15 @@
 import sys
-from PyQt6.QtWidgets import QApplication
-
-from client_auth import ClientAuthStore
-from gui import MainWindow
-from logging_config import LoggingSettingsStore
-from tray_icon import TrayIcon
-from ws_server import WebSocketServer
 
 
-def main():
+def main_gui():
+    from PyQt6.QtWidgets import QApplication
+
+    from client_auth import ClientAuthStore
+    from gui import MainWindow
+    from logging_config import LoggingSettingsStore
+    from tray_icon import TrayIcon
+    from ws_server import WebSocketServer
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
@@ -25,6 +26,19 @@ def main():
 
     window.show()
     sys.exit(app.exec())
+
+
+def main():
+    from cli import build_parser, main as cli_main
+
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command is None:
+        # No subcommand → launch GUI
+        main_gui()
+    else:
+        cli_main(sys.argv[1:])
 
 
 if __name__ == "__main__":
