@@ -13,9 +13,10 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QSystemTrayIcon,
     QMessageBox,
+    QSizePolicy,
 )
-from PyQt6.QtCore import pyqtSlot
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSlot, Qt
+from PyQt6.QtGui import QFont, QPixmap
 from client_auth import ClientAuthStore
 from client_manager_window import ClientManagerWindow
 import config
@@ -47,6 +48,20 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+
+        # -------------------- Logo --------------------
+        import os
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamf_logo.jpg")
+        self._logo_pixmap = QPixmap(logo_path)
+        self._logo_label = QLabel()
+        self._logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._logo_label.setMaximumWidth(600)
+        if not self._logo_pixmap.isNull():
+            self._logo_label.setMinimumHeight(1)
+            sp = self._logo_label.sizePolicy()
+            sp.setVerticalPolicy(QSizePolicy.Policy.Fixed)
+            self._logo_label.setSizePolicy(sp)
+        layout.addWidget(self._logo_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         # -------------------- Connection settings --------------------
         conn_group = QGroupBox("PLC Connection")
@@ -198,6 +213,14 @@ class MainWindow(QMainWindow):
         self._logging_settings_window.show()
         self._logging_settings_window.raise_()
         self._logging_settings_window.activateWindow()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self._logo_pixmap.isNull():
+            w = min(self._logo_label.width(), 600)
+            scaled = self._logo_pixmap.scaledToWidth(w, Qt.TransformationMode.SmoothTransformation)
+            self._logo_label.setPixmap(scaled)
+            self._logo_label.setFixedHeight(scaled.height())
 
     def closeEvent(self, event):
         if not self._force_quit and self._tray and QSystemTrayIcon.isSystemTrayAvailable():
