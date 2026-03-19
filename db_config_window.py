@@ -24,9 +24,35 @@ from datablocks import calculate_offsets, plc_datablocks, save_plc_datablocks
 
 TYPE_SIZES = {
     "Bool": 1,
+    "Byte": 1,
+    "SInt": 1,
+    "USInt": 1,
+    "Word": 2,
     "Int": 2,
+    "UInt": 2,
+    "DWord": 4,
+    "DInt": 4,
+    "UDInt": 4,
+    "Real": 4,
+    "LReal": 8,
     "Time": 4,
 }
+
+SUPPORTED_TYPES = [
+    "Bool",
+    "Byte",
+    "SInt",
+    "USInt",
+    "Word",
+    "Int",
+    "UInt",
+    "DWord",
+    "DInt",
+    "UDInt",
+    "Real",
+    "LReal",
+    "Time",
+]
 
 
 class DbConfigWindow(QWidget):
@@ -72,7 +98,7 @@ class DbConfigWindow(QWidget):
         controls.addWidget(self.var_name_input, stretch=2)
 
         self.var_type_input = QComboBox()
-        self.var_type_input.addItems(["Bool", "Int", "Time"])
+        self.var_type_input.addItems(SUPPORTED_TYPES)
         controls.addWidget(self.var_type_input, stretch=1)
 
         self.var_log_input = QCheckBox("Log")
@@ -130,9 +156,6 @@ class DbConfigWindow(QWidget):
         root.addWidget(variable_group)
 
         footer = QHBoxLayout()
-        self.offset_note = QLabel("Offsets are manually editable. Legacy entries without offsets are auto-filled on load.")
-        footer.addWidget(self.offset_note)
-
         footer.addStretch()
 
         self.new_db_btn = QPushButton("New")

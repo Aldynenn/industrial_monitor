@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -31,6 +32,7 @@ class ClientManagerWindow(QWidget):
         self._auth_store = auth_store
         self._selected_client_id: int | None = None
         self._selected_is_active = True
+        self._selected_role = "user"
 
         root = QVBoxLayout(self)
 
@@ -49,6 +51,10 @@ class ClientManagerWindow(QWidget):
         self.password_input.setPlaceholderText("Password (min 4 chars)")
         form_layout.addRow("Password:", self.password_input)
 
+        self.role_input = QComboBox()
+        self.role_input.addItems(["user", "admin"])
+        form_layout.addRow("Role:", self.role_input)
+
         add_row = QHBoxLayout()
         self.add_btn = QPushButton("Add Client")
         self.add_btn.clicked.connect(self._on_add_client)
@@ -61,8 +67,8 @@ class ClientManagerWindow(QWidget):
         form_layout.addRow(add_row)
         root.addWidget(form_group)
 
-        self.clients_table = QTableWidget(0, 5)
-        self.clients_table.setHorizontalHeaderLabels(["ID", "Username", "Active", "Created", "Last Auth"])
+        self.clients_table = QTableWidget(0, 6)
+        self.clients_table.setHorizontalHeaderLabels(["ID", "Username", "Role", "Active", "Created", "Last Auth"])
         self.clients_table.verticalHeader().setVisible(False)
         self.clients_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.clients_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -73,6 +79,10 @@ class ClientManagerWindow(QWidget):
         self.toggle_active_btn = QPushButton("Disable Selected")
         self.toggle_active_btn.clicked.connect(self._on_toggle_active)
         actions.addWidget(self.toggle_active_btn)
+
+        self.toggle_role_btn = QPushButton("Set Selected As Admin")
+        self.toggle_role_btn.clicked.connect(self._on_toggle_role)
+        actions.addWidget(self.toggle_role_btn)
 
         self.delete_btn = QPushButton("Delete Selected")
         self.delete_btn.clicked.connect(self._on_delete_selected)
@@ -95,37 +105,48 @@ class ClientManagerWindow(QWidget):
         for row, client in enumerate(clients):
             self.clients_table.setItem(row, 0, QTableWidgetItem(str(client["id"])))
             self.clients_table.setItem(row, 1, QTableWidgetItem(client["username"]))
-            self.clients_table.setItem(row, 2, QTableWidgetItem("Yes" if client["is_active"] else "No"))
-            self.clients_table.setItem(row, 3, QTableWidgetItem(client["created_at"]))
-            self.clients_table.setItem(row, 4, QTableWidgetItem(client["last_auth_at"] or "-"))
+            self.clients_table.setItem(row, 2, QTableWidgetItem(client["role"]))
+            self.clients_table.setItem(row, 3, QTableWidgetItem("Yes" if client["is_active"] else "No"))
+            self.clients_table.setItem(row, 4, QTableWidgetItem(client["created_at"]))
+            self.clients_table.setItem(row, 5, QTableWidgetItem(client["last_auth_at"] or "-"))
 
         self._selected_client_id = None
         self._selected_is_active = True
+        self._selected_role = "user"
         self.toggle_active_btn.setText("Disable Selected")
+        self.toggle_role_btn.setText("Set Selected As Admin")
 
     def _on_selected_client_changed(self) -> None:
         row = self.clients_table.currentRow()
         if row < 0:
             self._selected_client_id = None
             self._selected_is_active = True
+            self._selected_role = "user"
             self.toggle_active_btn.setText("Disable Selected")
+            self.toggle_role_btn.setText("Set Selected As Admin")
             return
 
         id_item = self.clients_table.item(row, 0)
-        active_item = self.clients_table.item(row, 2)
-        if id_item is None or active_item is None:
+        role_item = self.clients_table.item(row, 2)
+        active_item = self.clients_table.item(row, 3)
+        if id_item is None or role_item is None or active_item is None:
             return
 
         self._selected_client_id = int(id_item.text())
+        self._selected_role = role_item.text().strip().lower()
         self._selected_is_active = active_item.text().strip().lower() == "yes"
         self.toggle_active_btn.setText("Disable Selected" if self._selected_is_active else "Enable Selected")
+        self.toggle_role_btn.setText(
+            "Set Selected As User" if self._selected_role == "admin" else "Set Selected As Admin"
+        )
 
     def _on_add_client(self) -> None:
         username = self.username_input.text().strip()
         password = self.password_input.text()
+        role = self.role_input.currentText()
 
         try:
-            self._auth_store.add_client(username, password)
+            self._auth_store.add_client(username, password, role=role)
         except ValueError as exc:
             QMessageBox.warning(self, "Cannot Add Client", str(exc))
             return
@@ -155,6 +176,15 @@ class ClientManagerWindow(QWidget):
             return
 
         self._auth_store.set_active(self._selected_client_id, not self._selected_is_active)
+        self._reload_clients()
+
+    def _on_toggle_role(self) -> None:
+        if self._selected_client_id is None:
+            QMessageBox.warning(self, "No Selection", "Select a client first.")
+            return
+
+        next_role = "user" if self._selected_role == "admin" else "admin"
+        self._auth_store.set_role(self._selected_client_id, next_role)
         self._reload_clients()
 
     def _on_delete_selected(self) -> None:

@@ -59,8 +59,9 @@ h1 {
 
 .controls {
     display: flex;
+    flex-direction: column;
     gap: 0.75rem;
-    align-items: center;
+    /* align-items: center; */
     margin-bottom: 2rem;
 }
 
@@ -88,6 +89,7 @@ h1 {
     font-size: 0.85rem;
     cursor: pointer;
     transition: opacity 100ms;
+    width: fit-content;
 }
 
 .controls button:hover {
@@ -96,11 +98,6 @@ h1 {
 
 .controls button.disconnect {
     background: var(--red);
-}
-
-.auth-controls {
-    flex-wrap: wrap;
-    margin-top: -1rem;
 }
 
 #ws-password,
@@ -119,6 +116,241 @@ h1 {
 
 .auth-status.fail {
     color: var(--red);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.admin-panel {
+    margin-bottom: 2rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.admin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.admin-header h2 {
+    font-size: 0.95rem;
+}
+
+.admin-help {
+    margin-top: 0.4rem;
+    margin-bottom: 0.75rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+#save-visibility-btn {
+    background: var(--amber);
+    color: #121212;
+    border: none;
+    border-radius: 6px;
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+#save-visibility-btn:hover {
+    opacity: 0.9;
+}
+
+.visibility-editor {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+
+.visibility-db {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem;
+}
+
+.visibility-db-title {
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.visibility-field {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--muted);
+    margin: 0.2rem 0;
+    font-size: 0.8rem;
+}
+
+.viz-panel,
+.graph-panel {
+    margin-bottom: 2rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.viz-header,
+.graph-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.viz-header h2,
+.graph-header h2 {
+    font-size: 0.95rem;
+}
+
+.viz-help {
+    margin-top: 0.4rem;
+    margin-bottom: 0.75rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+#clear-graph-btn {
+    background: var(--amber);
+    color: #121212;
+    border: none;
+    border-radius: 6px;
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+#add-graph-btn {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.viz-settings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.viz-group {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.viz-group h3 {
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.viz-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.35rem 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.viz-row input[type="color"] {
+    width: 2rem;
+    height: 1.4rem;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+
+.viz-row input[type="checkbox"] {
+    accent-color: var(--blue);
+}
+
+.graph-list {
+    display: grid;
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+
+.graph-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem;
+    background: #151926;
+}
+
+.graph-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+}
+
+.graph-title-input {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.82rem;
+    padding: 0.35rem 0.55rem;
+    width: 260px;
+}
+
+.remove-graph-btn {
+    background: #2b1a1f;
+    color: #f5c0cc;
+    border: 1px solid #5b2532;
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.graph-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.4rem 0.9rem;
+    margin-bottom: 0.7rem;
+}
+
+.graph-control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.graph-control-row input[type="checkbox"] {
+    accent-color: var(--blue);
+}
+
+.graph-summary {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+}
+
+.graph-canvas {
+    width: 100%;
+    height: 320px;
+    background: #131722;
+    border: 1px solid var(--border);
+    border-radius: 8px;
 }
 
 /* ---------- Datablock sections ---------- */

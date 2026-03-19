@@ -1,4 +1,5 @@
 import snap7
+import struct
 from PyQt6.QtCore import QThread, pyqtSignal
 
 import config
@@ -86,13 +87,56 @@ class PLCWorker(QThread):
     def stop(self):
         self._running = False
 
-    _type_sizes = {"Bool": 1, "Int": 2, "Time": 4}
-
-    _field_parsers = {
-        "Bool": lambda buf, field, base: snap7.util.get_bool(buf, field["byte_offset"] - base, field["bit_offset"]),
-        "Int": lambda buf, field, base: snap7.util.get_int(buf, field["byte_offset"] - base),
-        "Time": lambda buf, field, base: snap7.util.get_dword(buf, field["byte_offset"] - base),
+    _type_sizes = {
+        "Bool": 1,
+        "Byte": 1,
+        "SInt": 1,
+        "USInt": 1,
+        "Word": 2,
+        "Int": 2,
+        "UInt": 2,
+        "DWord": 4,
+        "DInt": 4,
+        "UDInt": 4,
+        "Real": 4,
+        "LReal": 8,
+        "Time": 4,
     }
+
+    @staticmethod
+    def _parse_field_value(buf: bytes, field: dict, base: int):
+        offset = int(field["byte_offset"]) - base
+        field_type = field.get("type")
+
+        if field_type == "Bool":
+            return snap7.util.get_bool(buf, offset, int(field.get("bit_offset", 0)))
+        if field_type == "Byte":
+            return int.from_bytes(buf[offset: offset + 1], byteorder="big", signed=False)
+        if field_type == "SInt":
+            return int.from_bytes(buf[offset: offset + 1], byteorder="big", signed=True)
+        if field_type == "USInt":
+            return int.from_bytes(buf[offset: offset + 1], byteorder="big", signed=False)
+        if field_type == "Word":
+            return int.from_bytes(buf[offset: offset + 2], byteorder="big", signed=False)
+        if field_type == "Int":
+            return int.from_bytes(buf[offset: offset + 2], byteorder="big", signed=True)
+        if field_type == "UInt":
+            return int.from_bytes(buf[offset: offset + 2], byteorder="big", signed=False)
+        if field_type == "DWord":
+            return int.from_bytes(buf[offset: offset + 4], byteorder="big", signed=False)
+        if field_type == "DInt":
+            return int.from_bytes(buf[offset: offset + 4], byteorder="big", signed=True)
+        if field_type == "UDInt":
+            return int.from_bytes(buf[offset: offset + 4], byteorder="big", signed=False)
+        if field_type == "Real":
+            return struct.unpack(">f", buf[offset: offset + 4])[0]
+        if field_type == "LReal":
+            return struct.unpack(">d", buf[offset: offset + 8])[0]
+        if field_type == "Time":
+            # Siemens TIME stores milliseconds in a signed 32-bit integer.
+            return int.from_bytes(buf[offset: offset + 4], byteorder="big", signed=True)
+
+        return None
 
     def _read_db_values(self) -> dict:
         """Read all datablock values defined in datablocks.py.
@@ -112,8 +156,8 @@ class PLCWorker(QThread):
 
             db_data = {}
             for field in fields:
-                parser = self._field_parsers.get(field["type"])
-                if parser:
-                    db_data[field["name"]] = parser(buf, field, start)
+                value = self._parse_field_value(buf, field, start)
+                if value is not None:
+                    db_data[field["name"]] = value
             result[db_name] = db_data
         return result

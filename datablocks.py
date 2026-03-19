@@ -6,7 +6,17 @@ from pathlib import Path
 
 TYPE_SIZES = {
     "Bool": 1,
+    "Byte": 1,
+    "SInt": 1,
+    "USInt": 1,
+    "Word": 2,
     "Int": 2,
+    "UInt": 2,
+    "DWord": 4,
+    "DInt": 4,
+    "UDInt": 4,
+    "Real": 4,
+    "LReal": 8,
     "Time": 4,
 }
 

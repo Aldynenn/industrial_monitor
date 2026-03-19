@@ -12,6 +12,8 @@ from pathlib import Path
 class ClientAuthStore:
     """SQLite-backed client credential store for WebSocket authentication."""
 
+    VALID_ROLES = {"user", "admin"}
+
     def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or Path(__file__).with_name("clients.db")
         self._lock = threading.Lock()
@@ -34,6 +36,7 @@ class ClientAuthStore:
                         username TEXT NOT NULL UNIQUE,
                         password_hash TEXT NOT NULL,
                         salt TEXT NOT NULL,
+                        role TEXT NOT NULL DEFAULT 'user',
                         is_active INTEGER NOT NULL DEFAULT 1,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
@@ -41,9 +44,17 @@ class ClientAuthStore:
                     )
                     """
                 )
+                self._ensure_schema(conn)
                 conn.commit()
             finally:
                 conn.close()
+
+    def _ensure_schema(self, conn: sqlite3.Connection) -> None:
+        cols = conn.execute("PRAGMA table_info(clients)").fetchall()
+        col_names = {row[1] for row in cols}
+        if "role" not in col_names:
+            conn.execute("ALTER TABLE clients ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+            conn.execute("UPDATE clients SET role = 'admin' WHERE username = 'admin'")
 
     def _seed_default_client(self) -> None:
         # Ensure first-time setup has one usable account.
@@ -57,8 +68,8 @@ class ClientAuthStore:
                     password_hash = self._hash_password("admin123", salt)
                     conn.execute(
                         """
-                        INSERT INTO clients (username, password_hash, salt, is_active, created_at, updated_at)
-                        VALUES (?, ?, ?, 1, ?, ?)
+                        INSERT INTO clients (username, password_hash, salt, role, is_active, created_at, updated_at)
+                        VALUES (?, ?, ?, 'admin', 1, ?, ?)
                         """,
                         ("admin", password_hash, salt.hex(), now, now),
                     )
@@ -72,7 +83,7 @@ class ClientAuthStore:
             try:
                 rows = conn.execute(
                     """
-                    SELECT id, username, is_active, created_at, updated_at, last_auth_at
+                    SELECT id, username, role, is_active, created_at, updated_at, last_auth_at
                     FROM clients
                     ORDER BY username COLLATE NOCASE ASC
                     """
@@ -81,6 +92,7 @@ class ClientAuthStore:
                     {
                         "id": row["id"],
                         "username": row["username"],
+                        "role": row["role"],
                         "is_active": bool(row["is_active"]),
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
@@ -91,9 +103,11 @@ class ClientAuthStore:
             finally:
                 conn.close()
 
-    def add_client(self, username: str, password: str) -> None:
+    def add_client(self, username: str, password: str, role: str = "user") -> None:
         username = username.strip()
+        role = role.strip().lower()
         self._validate_credentials(username, password)
+        self._validate_role(role)
 
         salt = os.urandom(16)
         password_hash = self._hash_password(password, salt)
@@ -104,10 +118,10 @@ class ClientAuthStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO clients (username, password_hash, salt, is_active, created_at, updated_at)
-                    VALUES (?, ?, ?, 1, ?, ?)
+                    INSERT INTO clients (username, password_hash, salt, role, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 1, ?, ?)
                     """,
-                    (username, password_hash, salt.hex(), now, now),
+                    (username, password_hash, salt.hex(), role, now, now),
                 )
                 conn.commit()
             except sqlite3.IntegrityError as exc:
@@ -154,37 +168,52 @@ class ClientAuthStore:
             finally:
                 conn.close()
 
-    def authenticate_client(self, username: str, password: str) -> tuple[bool, str]:
+    def set_role(self, client_id: int, role: str) -> None:
+        role = role.strip().lower()
+        self._validate_role(role)
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    "UPDATE clients SET role = ?, updated_at = ? WHERE id = ?",
+                    (role, self._now_iso(), client_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def authenticate_client(self, username: str, password: str) -> tuple[bool, str, str | None]:
         username = username.strip()
         if not username or not password:
-            return False, "Username and password are required."
+            return False, "Username and password are required.", None
 
         with self._lock:
             conn = self._connect()
             try:
                 row = conn.execute(
                     """
-                    SELECT id, password_hash, salt, is_active
+                    SELECT id, password_hash, salt, role, is_active
                     FROM clients
                     WHERE username = ?
                     """,
                     (username,),
                 ).fetchone()
                 if row is None:
-                    return False, "Invalid credentials."
+                    return False, "Invalid credentials.", None
                 if not bool(row["is_active"]):
-                    return False, "Client is disabled."
+                    return False, "Client is disabled.", None
 
                 calc_hash = self._hash_password(password, bytes.fromhex(row["salt"]))
                 if not hmac.compare_digest(calc_hash, row["password_hash"]):
-                    return False, "Invalid credentials."
+                    return False, "Invalid credentials.", None
 
                 conn.execute(
                     "UPDATE clients SET last_auth_at = ?, updated_at = ? WHERE id = ?",
                     (self._now_iso(), self._now_iso(), row["id"]),
                 )
                 conn.commit()
-                return True, "Authenticated."
+                return True, "Authenticated.", row["role"]
             finally:
                 conn.close()
 
@@ -194,6 +223,11 @@ class ClientAuthStore:
             raise ValueError("Username is required.")
         if len(password) < 4:
             raise ValueError("Password must be at least 4 characters long.")
+
+    @classmethod
+    def _validate_role(cls, role: str) -> None:
+        if role not in cls.VALID_ROLES:
+            raise ValueError("Role must be either 'user' or 'admin'.")
 
     @staticmethod
     def _hash_password(password: str, salt: bytes) -> str:

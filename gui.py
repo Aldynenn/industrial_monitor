@@ -140,9 +140,7 @@ class MainWindow(QMainWindow):
 
     def _stop_polling(self):
         self.status_label.setText("Status: Stopping...")
-        if self.worker is not None:
-            self.worker.stop()
-            self.worker.wait(3000)
+        self._stop_worker_if_running()
 
     @pyqtSlot(dict)
     def _on_data(self, data: dict):
@@ -174,6 +172,11 @@ class MainWindow(QMainWindow):
         self.ip_input.setEnabled(enabled)
         self.rack_input.setEnabled(enabled)
         self.slot_input.setEnabled(enabled)
+
+    def _stop_worker_if_running(self):
+        if self.worker is not None:
+            self.worker.stop()
+            self.worker.wait(3000)
 
     def _open_db_config_window(self):
         if self._db_config_window is None:
@@ -217,16 +220,12 @@ class MainWindow(QMainWindow):
                     2000,
                 )
             elif clicked is quit_btn:
-                if self.worker is not None:
-                    self.worker.stop()
-                    self.worker.wait(3000)
+                self._stop_worker_if_running()
                 event.accept()
                 QApplication.quit()
             else:
                 event.ignore()
         else:
             # Actually quit: stop worker, clean up
-            if self.worker is not None:
-                self.worker.stop()
-                self.worker.wait(3000)
+            self._stop_worker_if_running()
             event.accept()

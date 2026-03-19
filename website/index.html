@@ -20,17 +20,42 @@
   <div class="controls">
     <label for="ws-url">WebSocket URL</label>
     <input id="ws-url" type="text" value="ws://localhost:8765" />
-    <button id="connect-btn" onclick="toggleConnection()">Connect</button>
-  </div>
-
-  <div class="controls auth-controls">
     <label for="ws-username">Username</label>
     <input id="ws-username" type="text" value="admin" />
     <label for="ws-password">Password</label>
     <input id="ws-password" type="password" value="admin" />
-    <button id="auth-btn" onclick="authenticateClient()">Authenticate</button>
     <span id="auth-status" class="auth-status">Not authenticated</span>
+    <span id="role-status" class="auth-status">Role: -</span>
+    <button id="connect-btn" onclick="toggleConnection()">Connect</button>
   </div>
+
+  <section id="admin-panel" class="admin-panel hidden">
+    <div class="admin-header">
+      <h2>Global Visibility Settings</h2>
+      <button id="save-visibility-btn" type="button">Save Visibility</button>
+    </div>
+    <p class="admin-help">Only admins can change what fields are visible for all connected clients.</p>
+    <div id="visibility-editor" class="visibility-editor"></div>
+  </section>
+
+  <section id="viz-panel" class="viz-panel">
+    <div class="viz-header">
+      <h2>Visualization Settings</h2>
+      <button id="clear-graph-btn" type="button">Clear Graph History</button>
+    </div>
+    <p class="viz-help">Choose active colors for boolean fields. Graph field selection is configured per graph below.</p>
+    <div id="viz-settings" class="viz-settings"></div>
+  </section>
+
+  <section id="graph-panel" class="graph-panel">
+    <div class="graph-header">
+      <h2>Graphs</h2>
+      <div class="graph-actions">
+        <button id="add-graph-btn" type="button">Add Graph</button>
+      </div>
+    </div>
+    <div id="graph-list" class="graph-list"></div>
+  </section>
 
   <div id="data-container"></div>
 
