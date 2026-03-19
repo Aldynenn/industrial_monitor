@@ -37,6 +37,22 @@ h1 {
     letter-spacing: -0.02em;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.header-stat {
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+
+.header-stat span {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
 #connection-status {
     display: flex;
     align-items: center;
@@ -57,11 +73,11 @@ h1 {
     background: var(--green);
 }
 
+/* ---------- Login panel ---------- */
 .controls {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    /* align-items: center; */
     margin-bottom: 2rem;
 }
 
@@ -96,13 +112,24 @@ h1 {
     opacity: 0.85;
 }
 
-.controls button.disconnect {
-    background: var(--red);
-}
-
 #ws-password,
 #ws-username {
     width: 180px;
+}
+
+.header-disconnect {
+    background: var(--red);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: opacity 100ms;
+}
+
+.header-disconnect:hover {
+    opacity: 0.85;
 }
 
 .auth-status {
@@ -122,23 +149,120 @@ h1 {
     display: none !important;
 }
 
-.admin-panel {
-    margin-bottom: 2rem;
+/* ---------- Sidebar ---------- */
+.sidebar-toggle-btn {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem;
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 100ms;
 }
 
-.admin-header {
+.sidebar-toggle-btn:hover {
+    background: var(--border);
+}
+
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 90;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 380px;
+    max-width: 90vw;
+    height: 100vh;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    z-index: 100;
+    transform: translateX(100%);
+    transition: transform 200ms ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar.open {
+    transform: translateX(0);
+}
+
+.sidebar-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
 }
 
-.admin-header h2 {
-    font-size: 0.95rem;
+.sidebar-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.sidebar-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+    line-height: 1;
+}
+
+.sidebar-close-btn:hover {
+    color: var(--text);
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+}
+
+.sidebar-section {
+    margin-bottom: 1.25rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.85rem;
+}
+
+.sidebar-section-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar-section-title::before {
+    content: '\25B6';
+    font-size: 0.6rem;
+    transition: transform 150ms;
+}
+
+.sidebar-section[open] > .sidebar-section-title::before {
+    transform: rotate(90deg);
+}
+
+.sidebar-section-title::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-section-actions {
+    margin-top: 0.6rem;
+    display: flex;
+    gap: 0.5rem;
 }
 
 .admin-help {
@@ -164,7 +288,7 @@ h1 {
 
 .visibility-editor {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: 1fr;
     gap: 0.75rem;
 }
 
@@ -189,7 +313,6 @@ h1 {
     font-size: 0.8rem;
 }
 
-.viz-panel,
 .graph-panel {
     margin-bottom: 2rem;
     background: var(--card);
@@ -198,7 +321,6 @@ h1 {
     padding: 1rem;
 }
 
-.viz-header,
 .graph-header {
     display: flex;
     align-items: center;
@@ -206,7 +328,6 @@ h1 {
     gap: 1rem;
 }
 
-.viz-header h2,
 .graph-header h2 {
     font-size: 0.95rem;
 }
@@ -240,7 +361,7 @@ h1 {
 
 .viz-settings {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1rem;
 }
 
@@ -321,7 +442,7 @@ h1 {
 
 .graph-controls {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 0.4rem 0.9rem;
     margin-bottom: 0.7rem;
 }

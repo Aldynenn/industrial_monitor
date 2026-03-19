@@ -29,6 +29,31 @@ const graphState = {
 
 let graphRedrawScheduled = false;
 
+// ---------- Packet interval tracking ----------
+let _lastPacketTime = null;
+let _packetIntervalSum = 0;
+let _packetIntervalCount = 0;
+
+function recordPacketArrival() {
+    const now = performance.now();
+    if (_lastPacketTime !== null) {
+        _packetIntervalSum += now - _lastPacketTime;
+        _packetIntervalCount++;
+        const avgMs = _packetIntervalSum / _packetIntervalCount;
+        const el = document.getElementById("avg-interval");
+        if (el) el.textContent = avgMs < 1000 ? `${avgMs.toFixed(0)} ms` : `${(avgMs / 1000).toFixed(2)} s`;
+    }
+    _lastPacketTime = now;
+}
+
+function resetPacketInterval() {
+    _lastPacketTime = null;
+    _packetIntervalSum = 0;
+    _packetIntervalCount = 0;
+    const el = document.getElementById("avg-interval");
+    if (el) el.textContent = "– ms";
+}
+
 function scheduleGraphRedraw() {
     if (graphRedrawScheduled) return;
     graphRedrawScheduled = true;
@@ -36,6 +61,27 @@ function scheduleGraphRedraw() {
         drawAllGraphs();
         graphRedrawScheduled = false;
     });
+}
+
+// ---------- Sidebar ----------
+function toggleSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    const isOpen = sidebar.classList.contains("open");
+    sidebar.classList.toggle("open", !isOpen);
+    overlay.classList.toggle("hidden", isOpen);
+}
+
+function showLoginPanel(show) {
+    const panel = document.getElementById("login-panel");
+    if (panel) panel.classList.toggle("hidden", !show);
+}
+
+function clearLoginInputs() {
+    const password = document.getElementById("ws-password");
+    const username = document.getElementById("ws-username");
+    if (password) password.value = "";
+    if (username) username.value = "";
 }
 
 // ---------- WebSocket ----------
@@ -75,6 +121,14 @@ function connect() {
         setAuthenticated(false, "Not authenticated");
         setRole("-");
         showAdminPanel(false);
+        showLoginPanel(true);
+        document.getElementById("disconnect-btn")?.classList.add("hidden");
+        document.getElementById("sidebar-toggle-btn")?.classList.add("hidden");
+        document.getElementById("avg-interval-label")?.classList.add("hidden");
+        resetPacketInterval();
+        // Close sidebar on disconnect
+        document.getElementById("sidebar")?.classList.remove("open");
+        document.getElementById("sidebar-overlay")?.classList.add("hidden");
         clearRenderedData(true);
         log("Connection closed", "info");
     });
@@ -121,6 +175,11 @@ function handleMessage(payload) {
             setAuthenticated(true, "Authenticated");
             setRole(payload.role || "user");
             showAdminPanel((payload.role || "user") === "admin");
+            showLoginPanel(false);
+            clearLoginInputs();
+            document.getElementById("disconnect-btn")?.classList.remove("hidden");
+            document.getElementById("sidebar-toggle-btn")?.classList.remove("hidden");
+            document.getElementById("avg-interval-label")?.classList.remove("hidden");
             requestVisibilityConfig();
             log(payload.message || "Authentication successful", "info");
         } else {
@@ -157,6 +216,7 @@ function handleMessage(payload) {
             log("Received data before authentication; ignoring", "error");
             return;
         }
+        recordPacketArrival();
         latestData = payload.data || {};
         maybeInitVisualizationSettings(latestData);
         updateUI(latestData);
@@ -169,6 +229,7 @@ function handleMessage(payload) {
 
     // Backward compatibility for legacy server that sends raw data objects.
     if (isAuthenticated) {
+        recordPacketArrival();
         latestData = payload;
         maybeInitVisualizationSettings(latestData);
         updateUI(payload);
@@ -610,7 +671,7 @@ function renderVisualizationSettings(data) {
 }
 
 function showAdminPanel(show) {
-    const panel = document.getElementById("admin-panel");
+    const panel = document.getElementById("admin-details");
     if (!panel) return;
     panel.classList.toggle("hidden", !show);
 }
@@ -854,17 +915,12 @@ function updateUI(data) {
 function setConnected(connected) {
     const el = document.getElementById("connection-status");
     const text = document.getElementById("status-text");
-    const btn = document.getElementById("connect-btn");
     if (connected) {
         el.classList.add("connected");
         text.textContent = "Connected";
-        btn.textContent = "Disconnect";
-        btn.classList.add("disconnect");
     } else {
         el.classList.remove("connected");
         text.textContent = "Disconnected";
-        btn.textContent = "Connect";
-        btn.classList.remove("disconnect");
     }
 }
 

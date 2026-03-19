@@ -11,41 +11,55 @@
 
   <header>
     <h1>Industrial Monitor</h1>
-    <div id="connection-status">
-      <span class="dot"></span>
-      <span id="status-text">Disconnected</span>
+    <div class="header-right">
+      <div id="connection-status">
+        <span class="dot"></span>
+        <span id="status-text">Disconnected</span>
+      </div>
+      <span id="avg-interval-label" class="header-stat hidden">Avg interval: <span id="avg-interval">– ms</span></span>
+      <span id="auth-status" class="auth-status">Not authenticated</span>
+      <span id="role-status" class="auth-status">Role: -</span>
+      <button id="disconnect-btn" class="header-disconnect hidden" onclick="toggleConnection()">Disconnect</button>
+      <button id="sidebar-toggle-btn" class="sidebar-toggle-btn hidden" onclick="toggleSidebar()">&#9881; Settings</button>
     </div>
   </header>
 
-  <div class="controls">
+  <div id="login-panel" class="controls">
     <label for="ws-url">WebSocket URL</label>
     <input id="ws-url" type="text" value="ws://localhost:8765" />
     <label for="ws-username">Username</label>
     <input id="ws-username" type="text" value="admin" />
     <label for="ws-password">Password</label>
     <input id="ws-password" type="password" value="admin" />
-    <span id="auth-status" class="auth-status">Not authenticated</span>
-    <span id="role-status" class="auth-status">Role: -</span>
     <button id="connect-btn" onclick="toggleConnection()">Connect</button>
   </div>
 
-  <section id="admin-panel" class="admin-panel hidden">
-    <div class="admin-header">
-      <h2>Global Visibility Settings</h2>
-      <button id="save-visibility-btn" type="button">Save Visibility</button>
+  <!-- Side panel for settings -->
+  <div id="sidebar-overlay" class="sidebar-overlay hidden" onclick="toggleSidebar()"></div>
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <h2>Settings</h2>
+      <button class="sidebar-close-btn" onclick="toggleSidebar()">&times;</button>
     </div>
-    <p class="admin-help">Only admins can change what fields are visible for all connected clients.</p>
-    <div id="visibility-editor" class="visibility-editor"></div>
-  </section>
-
-  <section id="viz-panel" class="viz-panel">
-    <div class="viz-header">
-      <h2>Visualization Settings</h2>
-      <button id="clear-graph-btn" type="button">Clear Graph History</button>
+    <div class="sidebar-content">
+      <details id="viz-details" class="sidebar-section" open>
+        <summary class="sidebar-section-title">Visualization Settings</summary>
+        <div class="sidebar-section-actions">
+          <button id="clear-graph-btn" type="button">Clear Graph History</button>
+        </div>
+        <p class="viz-help">Choose active colors for boolean fields. Graph field selection is configured per graph below.</p>
+        <div id="viz-settings" class="viz-settings"></div>
+      </details>
+      <details id="admin-details" class="sidebar-section hidden">
+        <summary class="sidebar-section-title">Global Visibility Settings</summary>
+        <div class="sidebar-section-actions">
+          <button id="save-visibility-btn" type="button">Save Visibility</button>
+        </div>
+        <p class="admin-help">Only admins can change what fields are visible for all connected clients.</p>
+        <div id="visibility-editor" class="visibility-editor"></div>
+      </details>
     </div>
-    <p class="viz-help">Choose active colors for boolean fields. Graph field selection is configured per graph below.</p>
-    <div id="viz-settings" class="viz-settings"></div>
-  </section>
+  </aside>
 
   <section id="graph-panel" class="graph-panel">
     <div class="graph-header">
