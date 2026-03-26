@@ -4,20 +4,8 @@ import json
 import threading
 from pathlib import Path
 
-DEFAULTS: dict = {
-    "plc": {
-        "ip_address": "192.168.0.27",
-        "rack": 0,
-        "slot": 1,
-        "polling_interval_ms": 20,
-    },
-    "logging": {
-        "enabled": False,
-        "output_file": "plc_logs.log",
-        "include_header": True,
-    },
-    "ws_visibility": {},
-}
+_DEFAULTS_PATH = Path(__file__).with_name("defaults.json")
+DEFAULTS: dict = json.loads(_DEFAULTS_PATH.read_text(encoding="utf-8"))
 
 
 class SettingsStore:

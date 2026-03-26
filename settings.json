@@ -6,8 +6,8 @@
     "polling_interval_ms": 20
   },
   "logging": {
-    "enabled": false,
-    "output_file": "C:/dev/industrial_monitor/plc_logs.log",
+    "enabled": true,
+    "output_file": "C:/dev/industrial_monitor/logs/plc_logs.log",
     "include_header": true
   },
   "ws_visibility": {
