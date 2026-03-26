@@ -136,9 +136,12 @@ def handle_run(args: argparse.Namespace) -> None:
         logger.info("Disconnected from PLC.")
         done.set()
 
+    auto_reconnect = getattr(args, 'auto_reconnect', False)
+
     def on_error(msg: str):
         logger.error("PLC error: %s", msg)
-        done.set()
+        if not auto_reconnect:
+            done.set()
 
     worker = HeadlessPLCWorker(
         ip, rack, slot,
@@ -146,6 +149,7 @@ def handle_run(args: argparse.Namespace) -> None:
         on_connected=on_connected,
         on_disconnected=on_disconnected,
         on_error=on_error,
+        auto_reconnect=auto_reconnect,
     )
 
     # Graceful shutdown on Ctrl+C
@@ -181,6 +185,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--rack", type=int, default=None, help="PLC rack number (default: from config)")
     run_parser.add_argument("--slot", type=int, default=None, help="PLC slot number (default: from config)")
     run_parser.add_argument("--port", type=int, default=8765, help="WebSocket server port (default: 8765)")
+    run_parser.add_argument("--auto-reconnect", action="store_true", default=False,
+                            help="Automatically reconnect to PLC on connection loss")
 
     # ---- clients ----
     clients_parser = sub.add_parser("clients", help="Manage WebSocket client credentials")

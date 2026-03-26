@@ -98,6 +98,7 @@ class PLCCommunication:
         of its fields, reducing network round-trips from one per field to one per DB.
         """
         result = {}
+        consecutive_failures = 0
         for block in plc_datablocks:
             db_number = block["db_number"]
             db_name = block["properties"]["name"]
@@ -107,7 +108,13 @@ class PLCCommunication:
                 start = min(f["byte_offset"] for f in fields)
                 end = max(f["byte_offset"] + TYPE_SIZES.get(f["type"], 1) for f in fields)
                 buf = self.read_db_range(db_number, start, end - start)
+                consecutive_failures = 0
             except Exception:
+                consecutive_failures += 1
+                if consecutive_failures >= 2:
+                    logger.error("Multiple consecutive DB read failures – "
+                                 "connection likely lost")
+                    raise
                 logger.warning("Failed to read DB %s (DB%d), skipping",
                                db_name, db_number, exc_info=True)
                 continue
