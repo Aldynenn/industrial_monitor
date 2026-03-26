@@ -1,4 +1,5 @@
 import logging
+import math
 import struct
 import threading
 import time
@@ -19,6 +20,16 @@ logger = logging.getLogger(__name__)
 def _parse_field_value(buf: bytes, field: dict, base: int):
     offset = int(field["byte_offset"]) - base
     field_type = field.get("type")
+    size = TYPE_SIZES.get(field_type)
+    if size is None:
+        return None
+
+    # Guard against truncated / corrupted buffer.
+    if offset < 0 or offset + size > len(buf):
+        raise ValueError(
+            f"Buffer overrun for field '{field.get('name')}': "
+            f"offset={offset}, size={size}, buf_len={len(buf)}"
+        )
 
     if field_type == "Bool":
         return snap7.util.get_bool(buf, offset, int(field.get("bit_offset", 0)))
@@ -41,9 +52,19 @@ def _parse_field_value(buf: bytes, field: dict, base: int):
     if field_type == "UDInt":
         return int.from_bytes(buf[offset: offset + 4], byteorder="big", signed=False)
     if field_type == "Real":
-        return struct.unpack(">f", buf[offset: offset + 4])[0]
+        value = struct.unpack(">f", buf[offset: offset + 4])[0]
+        if not math.isfinite(value):
+            raise ValueError(
+                f"Non-finite Real for field '{field.get('name')}': {value}"
+            )
+        return value
     if field_type == "LReal":
-        return struct.unpack(">d", buf[offset: offset + 8])[0]
+        value = struct.unpack(">d", buf[offset: offset + 8])[0]
+        if not math.isfinite(value):
+            raise ValueError(
+                f"Non-finite LReal for field '{field.get('name')}': {value}"
+            )
+        return value
     if field_type == "Time":
         # Siemens TIME stores milliseconds in a signed 32-bit integer.
         return int.from_bytes(buf[offset: offset + 4], byteorder="big", signed=True)
@@ -82,13 +103,23 @@ class PLCCommunication:
             db_name = block["properties"]["name"]
             fields = block["properties"]["data"]
 
-            start = min(f["byte_offset"] for f in fields)
-            end = max(f["byte_offset"] + TYPE_SIZES.get(f["type"], 1) for f in fields)
-            buf = self.read_db_range(db_number, start, end - start)
+            try:
+                start = min(f["byte_offset"] for f in fields)
+                end = max(f["byte_offset"] + TYPE_SIZES.get(f["type"], 1) for f in fields)
+                buf = self.read_db_range(db_number, start, end - start)
+            except Exception:
+                logger.warning("Failed to read DB %s (DB%d), skipping",
+                               db_name, db_number, exc_info=True)
+                continue
 
             db_data = {}
             for field in fields:
-                value = _parse_field_value(buf, field, start)
+                try:
+                    value = _parse_field_value(buf, field, start)
+                except Exception:
+                    logger.warning("Bad value in DB %s field '%s', skipping",
+                                   db_name, field.get("name"), exc_info=True)
+                    continue
                 if value is not None:
                     db_data[field["name"]] = value
             result[db_name] = db_data
