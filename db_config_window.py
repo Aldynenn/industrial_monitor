@@ -132,6 +132,11 @@ class DbConfigWindow(QWidget):
         self.new_db_btn.clicked.connect(self._on_new_datablock)
         footer.addWidget(self.new_db_btn)
 
+        self.delete_db_btn = QPushButton("Delete Datablock")
+        self.delete_db_btn.clicked.connect(self._on_delete_datablock)
+        self.delete_db_btn.setEnabled(False)
+        footer.addWidget(self.delete_db_btn)
+
         self.save_db_btn = QPushButton("Add Datablock")
         self.save_db_btn.clicked.connect(self._on_save_datablock)
         footer.addWidget(self.save_db_btn)
@@ -207,6 +212,29 @@ class DbConfigWindow(QWidget):
                 return idx
         return None
 
+    def _on_delete_datablock(self) -> None:
+        if self._selected_db_index is None:
+            return
+
+        block = plc_datablocks[self._selected_db_index]
+        db_number = block["db_number"]
+        db_name = block["properties"]["name"]
+
+        reply = QMessageBox.question(
+            self,
+            "Delete Datablock",
+            f"Delete DB{db_number} ({db_name})? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        del plc_datablocks[self._selected_db_index]
+        save_plc_datablocks()
+        self._refresh_db_list()
+        self._on_new_datablock()
+
     def _on_new_datablock(self) -> None:
         self._selected_db_index = None
         self._selected_var_index = None
@@ -223,6 +251,7 @@ class DbConfigWindow(QWidget):
         self._variables.clear()
         self._refresh_variables_table()
         self.save_db_btn.setText("Add Datablock")
+        self.delete_db_btn.setEnabled(False)
 
     def _on_db_selected(self, row: int) -> None:
         if row < 0:
@@ -285,6 +314,7 @@ class DbConfigWindow(QWidget):
             ]
         self._refresh_variables_table()
         self.save_db_btn.setText("Save Changes")
+        self.delete_db_btn.setEnabled(True)
 
     def _on_variable_selected(self) -> None:
         row = self.variables_table.currentRow()
