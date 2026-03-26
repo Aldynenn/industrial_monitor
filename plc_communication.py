@@ -1,3 +1,4 @@
+import ctypes
 import logging
 import math
 import struct
@@ -5,6 +6,7 @@ import threading
 import time
 
 import snap7
+from snap7.type import Area, Parameter, S7DataItem, WordLen
 
 from config import DEFAULTS
 from datablocks import TYPE_SIZES, plc_datablocks
@@ -13,6 +15,7 @@ _DEFAULT_POLLING_MS = DEFAULTS["plc"]["polling_interval_ms"]
 
 _RECONNECT_BASE_S = 1
 _RECONNECT_MAX_S = 60
+_MAX_MULTI_ITEMS = 20  # S7 protocol limit per single PDU
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +81,11 @@ class PLCCommunication:
     def __init__(self, ip_address, rack, slot):
         self.plc = snap7.client.Client()
         try:
+            self.plc.set_param(Parameter.PDURequest, 960)
             self.plc.connect(ip_address, rack, slot)
             self.is_connected = self.plc.get_connected()
-            logger.info("Connected to PLC: %s", self.is_connected)
+            logger.info("Connected to PLC: %s (PDU: %d)",
+                        self.is_connected, self.plc.get_pdu_length())
         except Exception as e:
             logger.error("Error connecting to PLC: %s", e)
             self.is_connected = False
@@ -92,44 +97,61 @@ class PLCCommunication:
         return self.plc.db_read(db_number, start, size)
 
     def read_all_dbs(self) -> dict:
-        """Read all datablock values defined in datablocks.py.
+        """Read all datablock values using batched multi-var reads.
 
-        Each DB is read in a single db_read call covering the full byte range
-        of its fields, reducing network round-trips from one per field to one per DB.
+        Packs up to 20 DB read requests into a single S7 PDU via
+        ``read_multi_vars``, drastically reducing network round-trips
+        compared to one ``db_read`` call per datablock.
         """
-        result = {}
-        consecutive_failures = 0
+        # Build the request list: one item per datablock.
+        requests: list[tuple[dict, int, int]] = []  # (block, start, size)
         for block in plc_datablocks:
-            db_number = block["db_number"]
-            db_name = block["properties"]["name"]
             fields = block["properties"]["data"]
+            start = min(f["byte_offset"] for f in fields)
+            end = max(f["byte_offset"] + TYPE_SIZES.get(f["type"], 1) for f in fields)
+            requests.append((block, start, end - start))
 
-            try:
-                start = min(f["byte_offset"] for f in fields)
-                end = max(f["byte_offset"] + TYPE_SIZES.get(f["type"], 1) for f in fields)
-                buf = self.read_db_range(db_number, start, end - start)
-                consecutive_failures = 0
-            except Exception:
-                consecutive_failures += 1
-                if consecutive_failures >= 2:
-                    logger.error("Multiple consecutive DB read failures – "
-                                 "connection likely lost")
-                    raise
-                logger.warning("Failed to read DB %s (DB%d), skipping",
-                               db_name, db_number, exc_info=True)
-                continue
+        # Process in batches of _MAX_MULTI_ITEMS (S7 protocol limit).
+        result = {}
+        for batch_start in range(0, len(requests), _MAX_MULTI_ITEMS):
+            batch = requests[batch_start:batch_start + _MAX_MULTI_ITEMS]
+            items = (S7DataItem * len(batch))()
+            buffers = []
 
-            db_data = {}
-            for field in fields:
-                try:
-                    value = _parse_field_value(buf, field, start)
-                except Exception:
-                    logger.warning("Bad value in DB %s field '%s', skipping",
-                                   db_name, field.get("name"), exc_info=True)
+            for i, (block, start, size) in enumerate(batch):
+                buf = ctypes.create_string_buffer(size)
+                buffers.append(buf)
+                items[i].Area = Area.DB.value
+                items[i].WordLen = WordLen.Byte.value
+                items[i].DBNumber = block["db_number"]
+                items[i].Start = start
+                items[i].Amount = size
+                items[i].pData = ctypes.cast(buf, ctypes.POINTER(ctypes.c_uint8))
+
+            code, items = self.plc.read_multi_vars(items)
+
+            for i, (block, start, _size) in enumerate(batch):
+                db_name = block["properties"]["name"]
+                fields = block["properties"]["data"]
+
+                if items[i].Result != 0:
+                    logger.warning("Failed to read DB %s (DB%d), result=%d",
+                                   db_name, block["db_number"], items[i].Result)
                     continue
-                if value is not None:
-                    db_data[field["name"]] = value
-            result[db_name] = db_data
+
+                raw = bytes(buffers[i])
+                db_data = {}
+                for field in fields:
+                    try:
+                        value = _parse_field_value(raw, field, start)
+                    except Exception:
+                        logger.warning("Bad value in DB %s field '%s', skipping",
+                                       db_name, field.get("name"), exc_info=True)
+                        continue
+                    if value is not None:
+                        db_data[field["name"]] = value
+                result[db_name] = db_data
+
         return result
 
 
@@ -177,7 +199,9 @@ class HeadlessPLCWorker(threading.Thread):
                 self._on_connected()
 
             # --- poll ---
+            interval_s = self._polling_interval_ms / 1000
             while not self._stop_event.is_set():
+                t0 = time.monotonic()
                 try:
                     data = self.plc.read_all_dbs()
                     if self._broker:
@@ -186,7 +210,9 @@ class HeadlessPLCWorker(threading.Thread):
                     if self._on_error:
                         self._on_error(str(e))
                     break
-                self._stop_event.wait(self._polling_interval_ms / 1000)
+                remaining = interval_s - (time.monotonic() - t0)
+                if remaining > 0:
+                    self._stop_event.wait(remaining)
 
             # --- cleanup ---
             try:
@@ -263,7 +289,9 @@ try:
                 self.connected.emit()
 
                 # --- poll ---
+                interval_s = self._polling_interval_ms / 1000
                 while self._running:
+                    t0 = time.monotonic()
                     try:
                         data = self.plc.read_all_dbs()
                         if self._broker:
@@ -271,7 +299,9 @@ try:
                     except Exception as e:
                         self.error_occurred.emit(str(e))
                         break
-                    self.msleep(self._polling_interval_ms)
+                    remaining_ms = int((interval_s - (time.monotonic() - t0)) * 1000)
+                    if remaining_ms > 0:
+                        self.msleep(remaining_ms)
 
                 # --- cleanup ---
                 try:
