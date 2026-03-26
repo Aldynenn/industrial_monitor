@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QHeaderView,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -11,13 +12,14 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLabel,
     QGroupBox,
-    QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
     QSystemTrayIcon,
     QMessageBox,
     QSizePolicy,
 )
 from PyQt6.QtCore import pyqtSlot, Qt
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt6.QtGui import QBrush, QColor, QFont, QPixmap
 from client_auth import ClientAuthStore
 from client_manager_window import ClientManagerWindow
 from config import SettingsStore
@@ -120,13 +122,29 @@ class MainWindow(QMainWindow):
 
         # -------------------- Data display --------------------
         data_group = QGroupBox("PLC Data")
+        data_group.setCheckable(True)
+        data_group.setChecked(True)
+        data_group.toggled.connect(self._on_data_display_toggled)
         data_layout = QVBoxLayout()
-        self.data_display = QTextEdit()
-        self.data_display.setReadOnly(True)
+        self.data_display = QTreeWidget()
+        self.data_display.setHeaderLabels(["Name", "Value"])
+        self.data_display.setColumnCount(2)
+        self.data_display.header().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.data_display.header().setStretchLastSection(True)
+        self.data_display.setRootIsDecorated(True)
+        self.data_display.setAlternatingRowColors(True)
         self.data_display.setFont(QFont("Consolas", 10))
         data_layout.addWidget(self.data_display)
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
+        self._data_group = data_group
+
+        self._tree_db_items: dict[str, QTreeWidgetItem] = {}
+        self._tree_field_items: dict[str, dict[str, QTreeWidgetItem]] = {}
+        self._BOOL_TRUE_BG = QBrush(QColor(200, 240, 200))
+        self._BOOL_FALSE_BG = QBrush(QColor(240, 200, 200))
 
     # -------------------- Slots --------------------
 
@@ -150,6 +168,8 @@ class MainWindow(QMainWindow):
         self.start_stop_btn.setText("Stop")
         self.status_label.setText("Status: Connecting...")
         self.data_display.clear()
+        self._tree_db_items.clear()
+        self._tree_field_items.clear()
 
         self.worker = PLCWorker(ip, rack, slot, broker=self.broker,
                                 polling_interval_ms=self._settings_store.get_plc()["polling_interval_ms"],
@@ -159,6 +179,7 @@ class MainWindow(QMainWindow):
         self.worker.disconnected.connect(self._on_disconnected)
         self.worker.reconnecting.connect(self._on_reconnecting)
         self.worker.finished.connect(self._on_worker_finished)
+        self.auto_reconnect_input.toggled.connect(self._on_auto_reconnect_toggled)
         self.worker.start()
 
     def _stop_polling(self):
@@ -167,8 +188,50 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(dict)
     def _on_data(self, data: dict):
-        lines = [f"{k}: {v}" for k, v in data.items()]
-        self.data_display.setPlainText("\n".join(lines))
+        if not self._data_group.isChecked():
+            return
+        for db_name, fields in data.items():
+            if db_name not in self._tree_db_items:
+                db_item = QTreeWidgetItem([db_name, ""])
+                font = db_item.font(0)
+                font.setBold(True)
+                db_item.setFont(0, font)
+                self.data_display.addTopLevelItem(db_item)
+                db_item.setExpanded(True)
+                self._tree_db_items[db_name] = db_item
+                self._tree_field_items[db_name] = {}
+
+            db_item = self._tree_db_items[db_name]
+            field_items = self._tree_field_items[db_name]
+
+            for field_name, value in fields.items():
+                text = str(value)
+                if field_name not in field_items:
+                    item = QTreeWidgetItem([field_name, text])
+                    db_item.addChild(item)
+                    field_items[field_name] = item
+                else:
+                    item = field_items[field_name]
+                    item.setText(1, text)
+
+                if isinstance(value, bool):
+                    item.setBackground(1, self._BOOL_TRUE_BG if value else self._BOOL_FALSE_BG)
+
+        # Remove stale DB entries
+        for stale in set(self._tree_db_items) - set(data):
+            idx = self.data_display.indexOfTopLevelItem(self._tree_db_items[stale])
+            if idx >= 0:
+                self.data_display.takeTopLevelItem(idx)
+            del self._tree_db_items[stale]
+            del self._tree_field_items[stale]
+
+    @pyqtSlot(bool)
+    def _on_data_display_toggled(self, checked: bool):
+        self.data_display.setEnabled(checked)
+        if not checked:
+            self.data_display.clear()
+            self._tree_db_items.clear()
+            self._tree_field_items.clear()
 
     @pyqtSlot(str)
     def _on_error(self, msg: str):
@@ -195,12 +258,17 @@ class MainWindow(QMainWindow):
         self.start_stop_btn.setChecked(False)
         self.start_stop_btn.setText("Start")
         self._set_inputs_enabled(True)
+        self.auto_reconnect_input.toggled.disconnect(self._on_auto_reconnect_toggled)
+
+    @pyqtSlot(bool)
+    def _on_auto_reconnect_toggled(self, checked: bool):
+        if self.worker is not None:
+            self.worker.auto_reconnect = checked
 
     def _set_inputs_enabled(self, enabled: bool):
         self.ip_input.setEnabled(enabled)
         self.rack_input.setEnabled(enabled)
         self.slot_input.setEnabled(enabled)
-        self.auto_reconnect_input.setEnabled(enabled)
 
     def _stop_worker_if_running(self):
         if self.worker is not None:
