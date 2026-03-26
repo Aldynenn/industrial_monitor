@@ -20,7 +20,7 @@ from PyQt6.QtGui import QFont, QPixmap
 from client_auth import ClientAuthStore
 from client_manager_window import ClientManagerWindow
 import config
-from data_broker import DataBroker
+from data_broker import QtDataBroker
 from db_config_window import DbConfigWindow
 from logging_config import LoggingSettingsStore
 from logging_settings_window import LoggingSettingsWindow
@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
         self.worker = None
         self._auth_store = auth_store
         self._logging_settings_store = logging_settings_store
-        self.broker = DataBroker(self)
+        self.broker = QtDataBroker(self)
         self.broker.data_updated.connect(self._on_data)
         self._data_logger = PLCDataLogger(self.broker, self._logging_settings_store, self)
 

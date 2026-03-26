@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timezone
 from logging.handlers import MemoryHandler
 from pathlib import Path
 from time import monotonic
 
-from PyQt6.QtCore import QObject, QTimer
-
 from datablocks import plc_datablocks
-from data_broker import DataBroker
 from logging_config import LoggingSettingsStore
 
 FLUSH_INTERVAL_MS = 500
@@ -24,15 +22,10 @@ class TSVFormatter(logging.Formatter):
         return f"{record.timestamp}\t{record.variable}\t{record.value}"
 
 
-class PLCDataLogger(QObject):
-    """Logs PLC variable values based on per-variable logging intervals.
+class _PLCDataLoggerBase:
+    """Shared PLC data-logging logic (no framework dependency)."""
 
-    Records are buffered via a MemoryHandler and flushed to disk
-    periodically (every FLUSH_INTERVAL_MS) to reduce I/O overhead.
-    """
-
-    def __init__(self, broker: DataBroker, settings_store: LoggingSettingsStore, parent=None):
-        super().__init__(parent)
+    def _init_logging(self, broker, settings_store: LoggingSettingsStore):
         self._broker = broker
         self._settings_store = settings_store
         self._last_logged_ms: dict[str, int] = {}
@@ -44,13 +37,6 @@ class PLCDataLogger(QObject):
         self._file_handler: logging.FileHandler | None = None
         self._memory_handler: MemoryHandler | None = None
         self._current_file: str | None = None
-
-        self._broker.data_updated.connect(self._on_data)
-
-        self._flush_timer = QTimer(self)
-        self._flush_timer.setInterval(FLUSH_INTERVAL_MS)
-        self._flush_timer.timeout.connect(self._flush)
-        self._flush_timer.start()
 
     def _ensure_handler(self, output_file: str, include_header: bool) -> None:
         """Set up or reconfigure the file handler when the output path changes."""
@@ -138,3 +124,45 @@ class PLCDataLogger(QObject):
     def _flush(self) -> None:
         if self._memory_handler:
             self._memory_handler.flush()
+
+
+class HeadlessPLCDataLogger(_PLCDataLoggerBase):
+    """PLC data logger that uses a background thread for periodic flushing (no Qt)."""
+
+    def __init__(self, broker, settings_store: LoggingSettingsStore):
+        self._init_logging(broker, settings_store)
+        self._broker.data_updated.connect(self._on_data)
+        self._stop_event = threading.Event()
+        self._flush_thread = threading.Thread(target=self._flush_loop, daemon=True)
+        self._flush_thread.start()
+
+    def _flush_loop(self):
+        while not self._stop_event.wait(FLUSH_INTERVAL_MS / 1000):
+            self._flush()
+
+    def stop(self):
+        self._stop_event.set()
+
+
+# ---------------------------------------------------------------------------
+# Qt-based data logger (only available when PyQt6 is installed)
+# ---------------------------------------------------------------------------
+
+try:
+    from PyQt6.QtCore import QObject, QTimer
+
+    class PLCDataLogger(QObject, _PLCDataLoggerBase):
+        """PLC data logger using QTimer for periodic flushing (Qt GUI version)."""
+
+        def __init__(self, broker, settings_store: LoggingSettingsStore, parent=None):
+            super().__init__(parent)
+            self._init_logging(broker, settings_store)
+            self._broker.data_updated.connect(self._on_data)
+
+            self._flush_timer = QTimer(self)
+            self._flush_timer.setInterval(FLUSH_INTERVAL_MS)
+            self._flush_timer.timeout.connect(self._flush)
+            self._flush_timer.start()
+
+except ImportError:
+    pass

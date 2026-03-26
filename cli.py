@@ -100,26 +100,24 @@ def handle_clients(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Headless run (requires Qt core for QThread / signals)
+# Headless run (no Qt dependency)
 # ---------------------------------------------------------------------------
 
 def handle_run(args: argparse.Namespace) -> None:
     """Start PLC polling + WebSocket server without a GUI."""
-    from PyQt6.QtCore import QCoreApplication, QTimer
+    import threading
 
     from data_broker import DataBroker
     from logging_config import LoggingSettingsStore
-    from plc_communication import PLCWorker
-    from plc_data_logger import PLCDataLogger
+    from plc_communication import HeadlessPLCWorker
+    from plc_data_logger import HeadlessPLCDataLogger
     from ws_server import WebSocketServer
-
-    app = QCoreApplication(sys.argv)
 
     auth_store = ClientAuthStore()
     logging_settings_store = LoggingSettingsStore()
     broker = DataBroker()
 
-    _data_logger = PLCDataLogger(broker, logging_settings_store)
+    data_logger = HeadlessPLCDataLogger(broker, logging_settings_store)
 
     ws = WebSocketServer(broker, auth_store=auth_store, port=args.port)
     ws.start()
@@ -128,42 +126,41 @@ def handle_run(args: argparse.Namespace) -> None:
     rack = args.rack
     slot = args.slot
 
-    worker = PLCWorker(ip, rack, slot, broker=broker)
+    done = threading.Event()
 
     def on_connected():
         logger.info("Connected to PLC at %s (rack=%s, slot=%s)", ip, rack, slot)
 
     def on_disconnected():
         logger.info("Disconnected from PLC.")
-        app.quit()
+        done.set()
 
     def on_error(msg: str):
         logger.error("PLC error: %s", msg)
-        app.quit()
+        done.set()
 
-    worker.connected.connect(on_connected)
-    worker.disconnected.connect(on_disconnected)
-    worker.error_occurred.connect(on_error)
-    worker.finished.connect(app.quit)
+    worker = HeadlessPLCWorker(
+        ip, rack, slot,
+        broker=broker,
+        on_connected=on_connected,
+        on_disconnected=on_disconnected,
+        on_error=on_error,
+    )
 
     # Graceful shutdown on Ctrl+C
     def _shutdown(*_args):
         logger.info("Shutting down...")
         worker.stop()
-        worker.wait(3000)
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    # Allow Python signal handlers to fire inside the Qt event loop
-    timer = QTimer()
-    timer.start(200)
-    timer.timeout.connect(lambda: None)
-
     logger.info("Starting headless mode – PLC %s:%s/%s, WS port %s", ip, rack, slot, args.port)
     worker.start()
 
-    sys.exit(app.exec())
+    done.wait()
+    worker.join(timeout=3)
+    data_logger.stop()
 
 
 # ---------------------------------------------------------------------------
