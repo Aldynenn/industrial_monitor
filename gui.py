@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -19,16 +20,15 @@ from PyQt6.QtCore import pyqtSlot, Qt
 from PyQt6.QtGui import QFont, QPixmap
 from client_auth import ClientAuthStore
 from client_manager_window import ClientManagerWindow
-import config
+from config import SettingsStore
 from data_broker import QtDataBroker
 from db_config_window import DbConfigWindow
-from logging_config import LoggingSettingsStore
 from logging_settings_window import LoggingSettingsWindow
 from plc_communication import PLCWorker
 from plc_data_logger import PLCDataLogger
 
 class MainWindow(QMainWindow):
-    def __init__(self, auth_store: ClientAuthStore, logging_settings_store: LoggingSettingsStore):
+    def __init__(self, auth_store: ClientAuthStore, settings_store: SettingsStore):
         super().__init__()
         self.setWindowTitle("Industrial Monitor")
         self.setMinimumWidth(480)
@@ -40,10 +40,10 @@ class MainWindow(QMainWindow):
         self._logging_settings_window = None
         self.worker = None
         self._auth_store = auth_store
-        self._logging_settings_store = logging_settings_store
+        self._settings_store = settings_store
         self.broker = QtDataBroker(self)
         self.broker.data_updated.connect(self._on_data)
-        self._data_logger = PLCDataLogger(self.broker, self._logging_settings_store, self)
+        self._data_logger = PLCDataLogger(self.broker, self._settings_store, self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -67,19 +67,24 @@ class MainWindow(QMainWindow):
         conn_group = QGroupBox("PLC Connection")
         form = QFormLayout()
 
-        self.ip_input = QLineEdit(config.DEFAULT_IP_ADDRESS)
+        plc_settings = settings_store.get_plc()
+
+        self.ip_input = QLineEdit(plc_settings["ip_address"])
         self.ip_input.setPlaceholderText("e.g. 192.168.0.1")
         form.addRow("PLC IP:", self.ip_input)
 
         self.rack_input = QSpinBox()
         self.rack_input.setRange(0, 7)
-        self.rack_input.setValue(config.DEFAULT_RACK_NUMBER)
+        self.rack_input.setValue(plc_settings["rack"])
         form.addRow("Rack:", self.rack_input)
 
         self.slot_input = QSpinBox()
         self.slot_input.setRange(0, 31)
-        self.slot_input.setValue(config.DEFAULT_SLOT_NUMBER)
+        self.slot_input.setValue(plc_settings["slot"])
         form.addRow("Slot:", self.slot_input)
+
+        self.auto_reconnect_input = QCheckBox("Auto-reconnect")
+        form.addRow("", self.auto_reconnect_input)
 
         conn_group.setLayout(form)
         layout.addWidget(conn_group)
@@ -146,10 +151,13 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Status: Connecting...")
         self.data_display.clear()
 
-        self.worker = PLCWorker(ip, rack, slot, broker=self.broker)
+        self.worker = PLCWorker(ip, rack, slot, broker=self.broker,
+                                polling_interval_ms=self._settings_store.get_plc()["polling_interval_ms"],
+                                auto_reconnect=self.auto_reconnect_input.isChecked())
         self.worker.error_occurred.connect(self._on_error)
         self.worker.connected.connect(self._on_connected)
         self.worker.disconnected.connect(self._on_disconnected)
+        self.worker.reconnecting.connect(self._on_reconnecting)
         self.worker.finished.connect(self._on_worker_finished)
         self.worker.start()
 
@@ -165,9 +173,10 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str)
     def _on_error(self, msg: str):
         self.status_label.setText(f"Status: Error - {msg}")
-        self.start_stop_btn.setChecked(False)
-        self.start_stop_btn.setText("Start")
-        self._set_inputs_enabled(True)
+        if not (self.worker and self.worker.auto_reconnect):
+            self.start_stop_btn.setChecked(False)
+            self.start_stop_btn.setText("Start")
+            self._set_inputs_enabled(True)
 
     @pyqtSlot()
     def _on_connected(self):
@@ -176,6 +185,10 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def _on_disconnected(self):
         self.status_label.setText("Status: Disconnected")
+
+    @pyqtSlot(float)
+    def _on_reconnecting(self, backoff: float):
+        self.status_label.setText(f"Status: Reconnecting in {backoff:.0f}s...")
 
     @pyqtSlot()
     def _on_worker_finished(self):
@@ -187,6 +200,7 @@ class MainWindow(QMainWindow):
         self.ip_input.setEnabled(enabled)
         self.rack_input.setEnabled(enabled)
         self.slot_input.setEnabled(enabled)
+        self.auto_reconnect_input.setEnabled(enabled)
 
     def _stop_worker_if_running(self):
         if self.worker is not None:
@@ -209,7 +223,7 @@ class MainWindow(QMainWindow):
 
     def _open_logging_settings_window(self):
         if self._logging_settings_window is None:
-            self._logging_settings_window = LoggingSettingsWindow(self._logging_settings_store, self)
+            self._logging_settings_window = LoggingSettingsWindow(self._settings_store, self)
         self._logging_settings_window.show()
         self._logging_settings_window.raise_()
         self._logging_settings_window.activateWindow()

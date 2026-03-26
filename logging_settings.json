@@ -1,5 +1,0 @@
-{
-  "enabled": true,
-  "output_file": "C:/dev/industrial_monitor/plc_logs.log",
-  "include_header": true
-}

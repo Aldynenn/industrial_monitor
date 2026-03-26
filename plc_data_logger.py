@@ -8,7 +8,7 @@ from pathlib import Path
 from time import monotonic
 
 from datablocks import plc_datablocks
-from logging_config import LoggingSettingsStore
+from config import SettingsStore
 
 FLUSH_INTERVAL_MS = 500
 
@@ -25,7 +25,7 @@ class TSVFormatter(logging.Formatter):
 class _PLCDataLoggerBase:
     """Shared PLC data-logging logic (no framework dependency)."""
 
-    def _init_logging(self, broker, settings_store: LoggingSettingsStore):
+    def _init_logging(self, broker, settings_store: SettingsStore):
         self._broker = broker
         self._settings_store = settings_store
         self._last_logged_ms: dict[str, int] = {}
@@ -71,7 +71,7 @@ class _PLCDataLoggerBase:
             self._file_handler.stream.write("timestamp_utc_ms\tvariable\tvalue\n")
 
     def _on_data(self, data: dict) -> None:
-        settings = self._settings_store.get()
+        settings = self._settings_store.get_logging()
         if not settings.get("enabled", False):
             return
 
@@ -129,7 +129,7 @@ class _PLCDataLoggerBase:
 class HeadlessPLCDataLogger(_PLCDataLoggerBase):
     """PLC data logger that uses a background thread for periodic flushing (no Qt)."""
 
-    def __init__(self, broker, settings_store: LoggingSettingsStore):
+    def __init__(self, broker, settings_store: SettingsStore):
         self._init_logging(broker, settings_store)
         self._broker.data_updated.connect(self._on_data)
         self._stop_event = threading.Event()
@@ -154,7 +154,7 @@ try:
     class PLCDataLogger(QObject, _PLCDataLoggerBase):
         """PLC data logger using QTimer for periodic flushing (Qt GUI version)."""
 
-        def __init__(self, broker, settings_store: LoggingSettingsStore, parent=None):
+        def __init__(self, broker, settings_store: SettingsStore, parent=None):
             super().__init__(parent)
             self._init_logging(broker, settings_store)
             self._broker.data_updated.connect(self._on_data)

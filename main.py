@@ -6,8 +6,8 @@ def main_gui():
     from PyQt6.QtWidgets import QApplication
 
     from client_auth import ClientAuthStore
+    from config import SettingsStore
     from gui import MainWindow
-    from logging_config import LoggingSettingsStore
     from tray_icon import TrayIcon
     from ws_server import WebSocketServer
 
@@ -15,14 +15,15 @@ def main_gui():
     app.setQuitOnLastWindowClosed(False)
 
     auth_store = ClientAuthStore()
-    logging_settings_store = LoggingSettingsStore()
-    window = MainWindow(auth_store=auth_store, logging_settings_store=logging_settings_store)
+    settings_store = SettingsStore()
+    window = MainWindow(auth_store=auth_store, settings_store=settings_store)
 
     tray = TrayIcon(window)
     tray.show()
     window._tray = tray
 
-    ws = WebSocketServer(window.broker, auth_store=auth_store, port=8765)
+    ws = WebSocketServer(window.broker, auth_store=auth_store,
+                         settings_store=settings_store, port=8765)
     ws.start()
 
     window.show()

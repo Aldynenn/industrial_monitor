@@ -7,7 +7,7 @@ from pathlib import Path
 from websockets.asyncio.server import serve
 
 from client_auth import ClientAuthStore
-from data_broker import DataBroker
+from config import SettingsStore
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,15 @@ class WebSocketServer:
 
     def __init__(
         self,
-        broker: DataBroker,
+        broker,
         auth_store: ClientAuthStore,
+        settings_store: SettingsStore,
         host: str = "0.0.0.0",
         port: int = 8765,
     ):
         self._broker = broker
         self._auth_store = auth_store
+        self._settings_store = settings_store
         self._host = host
         self._port = port
         self._clients: set = set()
@@ -33,7 +35,6 @@ class WebSocketServer:
         self._client_last_sent: dict = {}  # websocket -> last sent (filtered) data
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
-        self._visibility_config_path = Path(__file__).with_name("ws_visibility_config.json")
         self._visibility_config = self._load_visibility_config()
 
         # Subscribe to broker updates
@@ -256,21 +257,14 @@ class WebSocketServer:
         return delta
 
     def _load_visibility_config(self) -> dict:
-        if not self._visibility_config_path.exists():
+        raw = self._settings_store.get_ws_visibility()
+        if not isinstance(raw, dict):
             return {}
-        try:
-            with self._visibility_config_path.open("r", encoding="utf-8") as f:
-                raw = json.load(f)
-            if not isinstance(raw, dict):
-                return {}
-            return self._normalize_visibility_config(raw)
-        except Exception:
-            return {}
+        return self._normalize_visibility_config(raw)
 
     def _save_visibility_config(self, config: dict) -> None:
         try:
-            with self._visibility_config_path.open("w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2, ensure_ascii=True)
+            self._settings_store.update_ws_visibility(config)
         except Exception as exc:
             logger.error("Failed to save visibility config: %s", exc)
 

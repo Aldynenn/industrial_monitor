@@ -1,0 +1,86 @@
+{
+  "plc": {
+    "ip_address": "192.168.0.27",
+    "rack": 0,
+    "slot": 1,
+    "polling_interval_ms": 20
+  },
+  "logging": {
+    "enabled": false,
+    "output_file": "C:/dev/industrial_monitor/plc_logs.log",
+    "include_header": true
+  },
+  "ws_visibility": {
+    "LED_states": {
+      "el01": true,
+      "el02": true,
+      "el03": true,
+      "el04": true,
+      "el05": true,
+      "el06": true,
+      "el07": true,
+      "el08": true,
+      "eoff_signal": true,
+      "il01": true,
+      "il02": true,
+      "il03": true,
+      "il04": true,
+      "il05": true,
+      "il06": true,
+      "il07": true,
+      "il08": true,
+      "etimer_duration": false,
+      "btn_green": false
+    },
+    "led_counter": {
+      "PV": true,
+      "CV": true,
+      "CU": false,
+      "CD": false,
+      "R": false,
+      "LD": false,
+      "QU": false,
+      "QD": false
+    },
+    "flash_timer_01": {
+      "ET": true,
+      "PT": false,
+      "IN": false,
+      "Q": false
+    },
+    "flash_timer_off_01": {
+      "PT": true,
+      "ET": true,
+      "IN": false,
+      "Q": false
+    },
+    "flash_timer_off_02": {
+      "PT": true,
+      "ET": true,
+      "IN": false,
+      "Q": true
+    },
+    "RuntimeDB": {
+      "memory": true,
+      "runtimeResult": true
+    },
+    "led_timer": {
+      "PT": false,
+      "ET": false,
+      "IN": false,
+      "Q": false
+    },
+    "led_pulse": {
+      "PT": false,
+      "ET": false,
+      "IN": false,
+      "Q": false
+    },
+    "flash_timer_02": {
+      "PT": false,
+      "ET": false,
+      "IN": false,
+      "Q": false
+    }
+  }
+}

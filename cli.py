@@ -108,18 +108,19 @@ def handle_run(args: argparse.Namespace) -> None:
     import threading
 
     from data_broker import DataBroker
-    from logging_config import LoggingSettingsStore
+    from config import SettingsStore
     from plc_communication import HeadlessPLCWorker
     from plc_data_logger import HeadlessPLCDataLogger
     from ws_server import WebSocketServer
 
     auth_store = ClientAuthStore()
-    logging_settings_store = LoggingSettingsStore()
+    settings_store = SettingsStore()
     broker = DataBroker()
 
-    data_logger = HeadlessPLCDataLogger(broker, logging_settings_store)
+    data_logger = HeadlessPLCDataLogger(broker, settings_store)
 
-    ws = WebSocketServer(broker, auth_store=auth_store, port=args.port)
+    ws = WebSocketServer(broker, auth_store=auth_store,
+                         settings_store=settings_store, port=args.port)
     ws.start()
 
     ip = args.ip
@@ -221,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
-    import config
+    from config import SettingsStore
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -232,12 +233,13 @@ def main(argv: list[str] | None = None) -> None:
 
     # Apply config defaults for 'run' where not overridden
     if args.command == "run":
+        plc_defaults = SettingsStore().get_plc()
         if args.ip is None:
-            args.ip = config.DEFAULT_IP_ADDRESS
+            args.ip = plc_defaults["ip_address"]
         if args.rack is None:
-            args.rack = config.DEFAULT_RACK_NUMBER
+            args.rack = plc_defaults["rack"]
         if args.slot is None:
-            args.slot = config.DEFAULT_SLOT_NUMBER
+            args.slot = plc_defaults["slot"]
         handle_run(args)
     elif args.command == "clients":
         handle_clients(args)

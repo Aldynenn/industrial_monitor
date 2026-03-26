@@ -14,13 +14,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from logging_config import LoggingSettingsStore
+from config import SettingsStore
 
 
 class LoggingSettingsWindow(QWidget):
     """Window for configuring global PLC logging settings."""
 
-    def __init__(self, settings_store: LoggingSettingsStore, parent=None):
+    def __init__(self, settings_store: SettingsStore, parent=None):
         super().__init__(parent)
         self.setWindowFlag(Qt.WindowType.Window, True)
         self.setWindowTitle("Logging Settings")
@@ -68,7 +68,7 @@ class LoggingSettingsWindow(QWidget):
 
     def _load_from_store(self) -> None:
         self._settings_store.load()
-        settings = self._settings_store.get()
+        settings = self._settings_store.get_logging()
         self.enabled_input.setChecked(bool(settings.get("enabled", False)))
         self.output_file_input.setText(str(settings.get("output_file", "plc_logs.log")))
         self.include_header_input.setChecked(bool(settings.get("include_header", True)))
@@ -85,7 +85,7 @@ class LoggingSettingsWindow(QWidget):
 
     def _on_save(self) -> None:
         try:
-            self._settings_store.update(
+            self._settings_store.update_logging(
                 enabled=self.enabled_input.isChecked(),
                 output_file=self.output_file_input.text(),
                 include_header=self.include_header_input.isChecked(),
