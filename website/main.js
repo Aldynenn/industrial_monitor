@@ -217,7 +217,20 @@ function handleMessage(payload) {
             return;
         }
         recordPacketArrival();
-        latestData = payload.data || {};
+        const incoming = payload.data || {};
+        if (payload.full) {
+            // Full snapshot — replace state entirely
+            latestData = incoming;
+        } else {
+            // Delta — merge changed fields into existing state
+            for (const [dbName, fields] of Object.entries(incoming)) {
+                if (!fields || typeof fields !== "object") continue;
+                if (!latestData[dbName] || typeof latestData[dbName] !== "object") {
+                    latestData[dbName] = {};
+                }
+                Object.assign(latestData[dbName], fields);
+            }
+        }
         maybeInitVisualizationSettings(latestData);
         updateUI(latestData);
         maybeInitVisibilityEditor(latestData, visibilityConfig);

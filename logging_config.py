@@ -7,7 +7,7 @@ from pathlib import Path
 
 DEFAULT_LOG_SETTINGS = {
     "enabled": False,
-    "output_file": "plc_logs.csv",
+    "output_file": "plc_logs.log",
     "include_header": True,
 }
 

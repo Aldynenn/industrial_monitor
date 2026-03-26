@@ -1,9 +1,13 @@
-import snap7
+import logging
 import struct
+
+import snap7
 from PyQt6.QtCore import QThread, pyqtSignal
 
 import config
 from datablocks import TYPE_SIZES, plc_datablocks
+
+logger = logging.getLogger(__name__)
 
 class PLCCommunication:
     is_connected = False
@@ -13,9 +17,9 @@ class PLCCommunication:
         try:
             self.plc.connect(ip_address, rack, slot)
             self.is_connected = self.plc.get_connected()
-            print(f"Connected to PLC: {self.is_connected}")
+            logger.info("Connected to PLC: %s", self.is_connected)
         except Exception as e:
-            print(f"Error connecting to PLC: {e}")
+            logger.error("Error connecting to PLC: %s", e)
             self.is_connected = False
 
     def disconnect(self):

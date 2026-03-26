@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import threading
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from websockets.asyncio.server import serve
 
 from client_auth import ClientAuthStore
 from data_broker import DataBroker
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketServer:
@@ -27,6 +30,7 @@ class WebSocketServer:
         self._authenticated_clients: set = set()
         self._client_usernames: dict = {}
         self._client_roles: dict = {}
+        self._client_last_sent: dict = {}  # websocket -> last sent (filtered) data
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._visibility_config_path = Path(__file__).with_name("ws_visibility_config.json")
@@ -47,7 +51,7 @@ class WebSocketServer:
 
     async def _serve(self):
         async with serve(self._handler, self._host, self._port):
-            print(f"WebSocket server listening on ws://{self._host}:{self._port}")
+            logger.info("WebSocket server listening on ws://%s:%s", self._host, self._port)
             await asyncio.Future()  # run forever
 
     async def _handler(self, websocket):
@@ -68,6 +72,7 @@ class WebSocketServer:
             self._authenticated_clients.discard(websocket)
             self._client_usernames.pop(websocket, None)
             self._client_roles.pop(websocket, None)
+            self._client_last_sent.pop(websocket, None)
 
     async def _on_client_message(self, websocket, message: str):
         """Handle an incoming message from a WebSocket client."""
@@ -108,7 +113,8 @@ class WebSocketServer:
                 latest = self._broker.latest
                 if latest:
                     filtered = self._apply_visibility(latest, self._visibility_config)
-                    await websocket.send(json.dumps({"type": "plc_data", "data": filtered}, default=str))
+                    self._client_last_sent[websocket] = filtered
+                    await websocket.send(json.dumps({"type": "plc_data", "data": filtered, "full": True}, default=str))
             else:
                 await websocket.send(json.dumps({"type": "auth", "ok": False, "message": info}))
             return
@@ -162,6 +168,8 @@ class WebSocketServer:
 
             self._visibility_config = self._normalize_visibility_config(config_payload)
             self._save_visibility_config(self._visibility_config)
+            # Invalidate cached state so all clients get a full resend
+            self._client_last_sent.clear()
             await websocket.send(
                 json.dumps(
                     {
@@ -184,7 +192,7 @@ class WebSocketServer:
                 await self._broadcast_data(latest)
             return
 
-        print(f"[WS] Received from {self._client_usernames.get(websocket, '?')}: {payload}")
+        logger.info("Received from %s: %s", self._client_usernames.get(websocket, '?'), payload)
 
     # -------------------- broker callback (called from Qt thread) --------------------
 
@@ -201,12 +209,51 @@ class WebSocketServer:
                 self._clients.discard(ws)
                 self._client_usernames.pop(ws, None)
                 self._client_roles.pop(ws, None)
+                self._client_last_sent.pop(ws, None)
                 self._authenticated_clients.discard(ws)
 
     async def _broadcast_data(self, data: dict):
         filtered = self._apply_visibility(data, self._visibility_config)
-        payload = json.dumps({"type": "plc_data", "data": filtered}, default=str)
-        await self._broadcast(payload)
+        for ws in list(self._authenticated_clients):
+            try:
+                last = self._client_last_sent.get(ws)
+                if last is None:
+                    # First message for this client — send full snapshot
+                    payload = json.dumps({"type": "plc_data", "data": filtered, "full": True}, default=str)
+                else:
+                    delta = self._compute_delta(last, filtered)
+                    if not delta:
+                        continue  # nothing changed for this client
+                    payload = json.dumps({"type": "plc_data", "data": delta}, default=str)
+                self._client_last_sent[ws] = filtered
+                await ws.send(payload)
+            except Exception:
+                self._clients.discard(ws)
+                self._client_usernames.pop(ws, None)
+                self._client_roles.pop(ws, None)
+                self._client_last_sent.pop(ws, None)
+                self._authenticated_clients.discard(ws)
+
+    @staticmethod
+    def _compute_delta(old: dict, new: dict) -> dict:
+        """Return only db/field entries whose values differ between old and new."""
+        delta: dict = {}
+        for db_name, new_fields in new.items():
+            if not isinstance(new_fields, dict):
+                continue
+            old_fields = old.get(db_name)
+            if not isinstance(old_fields, dict):
+                # Entire db is new
+                delta[db_name] = new_fields
+                continue
+            changed = {
+                field: value
+                for field, value in new_fields.items()
+                if old_fields.get(field) != value
+            }
+            if changed:
+                delta[db_name] = changed
+        return delta
 
     def _load_visibility_config(self) -> dict:
         if not self._visibility_config_path.exists():
@@ -225,7 +272,7 @@ class WebSocketServer:
             with self._visibility_config_path.open("w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=True)
         except Exception as exc:
-            print(f"[WS] Failed to save visibility config: {exc}")
+            logger.error("Failed to save visibility config: %s", exc)
 
     def _normalize_visibility_config(self, config: dict) -> dict:
         normalized: dict = {}

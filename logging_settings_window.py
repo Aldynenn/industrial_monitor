@@ -38,16 +38,16 @@ class LoggingSettingsWindow(QWidget):
 
         path_row = QHBoxLayout()
         self.output_file_input = QLineEdit()
-        self.output_file_input.setPlaceholderText("Path to CSV file")
+        self.output_file_input.setPlaceholderText("Path to log file")
         path_row.addWidget(self.output_file_input)
 
         self.browse_btn = QPushButton("Browse")
         self.browse_btn.clicked.connect(self._on_browse)
         path_row.addWidget(self.browse_btn)
-        form.addRow("Output CSV:", path_row)
+        form.addRow("Output file:", path_row)
 
-        self.include_header_input = QCheckBox("Write CSV header for new files")
-        form.addRow("CSV Header:", self.include_header_input)
+        self.include_header_input = QCheckBox("Write header for new files")
+        form.addRow("Header:", self.include_header_input)
 
         root.addWidget(group)
 
@@ -70,15 +70,15 @@ class LoggingSettingsWindow(QWidget):
         self._settings_store.load()
         settings = self._settings_store.get()
         self.enabled_input.setChecked(bool(settings.get("enabled", False)))
-        self.output_file_input.setText(str(settings.get("output_file", "plc_logs.csv")))
+        self.output_file_input.setText(str(settings.get("output_file", "plc_logs.log")))
         self.include_header_input.setChecked(bool(settings.get("include_header", True)))
 
     def _on_browse(self) -> None:
         selected, _ = QFileDialog.getSaveFileName(
             self,
-            "Select Log CSV File",
-            self.output_file_input.text().strip() or "plc_logs.csv",
-            "CSV files (*.csv);;All files (*.*)",
+            "Select Log File",
+            self.output_file_input.text().strip() or "plc_logs.log",
+            "Log files (*.log);;All files (*.*)",
         )
         if selected:
             self.output_file_input.setText(selected)

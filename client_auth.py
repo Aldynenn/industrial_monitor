@@ -151,8 +151,7 @@ class ClientAuthStore:
                 conn.close()
 
     def update_password(self, client_id: int, password: str) -> None:
-        if len(password) < 4:
-            raise ValueError("Password must be at least 4 characters long.")
+        self._validate_password(password)
 
         salt = os.urandom(16)
         password_hash = self._hash_password(password, salt)
@@ -218,11 +217,21 @@ class ClientAuthStore:
                 conn.close()
 
     @staticmethod
+    def _validate_password(password: str) -> None:
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if not any(c.isupper() for c in password):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        if not any(c.islower() for c in password):
+            raise ValueError("Password must contain at least one lowercase letter.")
+        if not any(c.isdigit() for c in password):
+            raise ValueError("Password must contain at least one digit.")
+
+    @staticmethod
     def _validate_credentials(username: str, password: str) -> None:
         if not username:
             raise ValueError("Username is required.")
-        if len(password) < 4:
-            raise ValueError("Password must be at least 4 characters long.")
+        ClientAuthStore._validate_password(password)
 
     @classmethod
     def _validate_role(cls, role: str) -> None:

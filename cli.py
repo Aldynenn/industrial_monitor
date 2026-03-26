@@ -8,10 +8,13 @@ Provides two subcommands:
 from __future__ import annotations
 
 import argparse
+import logging
 import signal
 import sys
 
 from client_auth import ClientAuthStore
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -128,14 +131,14 @@ def handle_run(args: argparse.Namespace) -> None:
     worker = PLCWorker(ip, rack, slot, broker=broker)
 
     def on_connected():
-        print(f"Connected to PLC at {ip} (rack={rack}, slot={slot})")
+        logger.info("Connected to PLC at %s (rack=%s, slot=%s)", ip, rack, slot)
 
     def on_disconnected():
-        print("Disconnected from PLC.")
+        logger.info("Disconnected from PLC.")
         app.quit()
 
     def on_error(msg: str):
-        print(f"PLC error: {msg}", file=sys.stderr)
+        logger.error("PLC error: %s", msg)
         app.quit()
 
     worker.connected.connect(on_connected)
@@ -145,7 +148,7 @@ def handle_run(args: argparse.Namespace) -> None:
 
     # Graceful shutdown on Ctrl+C
     def _shutdown(*_args):
-        print("\nShutting down...")
+        logger.info("Shutting down...")
         worker.stop()
         worker.wait(3000)
 
@@ -157,7 +160,7 @@ def handle_run(args: argparse.Namespace) -> None:
     timer.start(200)
     timer.timeout.connect(lambda: None)
 
-    print(f"Starting headless mode – PLC {ip}:{rack}/{slot}, WS port {args.port}")
+    logger.info("Starting headless mode – PLC %s:%s/%s, WS port %s", ip, rack, slot, args.port)
     worker.start()
 
     sys.exit(app.exec())
@@ -192,7 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
     # clients add
     add_p = client_sub.add_parser("add", help="Add a new client")
     add_p.add_argument("username", help="Client username")
-    add_p.add_argument("password", help="Client password (min 4 chars)")
+    add_p.add_argument("password", help="Client password (min 8 chars, upper+lower+digit)")
     add_p.add_argument("--role", default="user", choices=["user", "admin"], help="Client role (default: user)")
 
     # clients delete
@@ -215,7 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     # clients set-password
     pw_p = client_sub.add_parser("set-password", help="Update a client's password")
     pw_p.add_argument("id", type=int, help="Client ID")
-    pw_p.add_argument("password", help="New password (min 4 chars)")
+    pw_p.add_argument("password", help="New password (min 8 chars, upper+lower+digit)")
 
     return parser
 

@@ -48,7 +48,7 @@ class ClientManagerWindow(QWidget):
 
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setPlaceholderText("Password (min 4 chars)")
+        self.password_input.setPlaceholderText("Password (min 8 chars, upper+lower+digit)")
         form_layout.addRow("Password:", self.password_input)
 
         self.role_input = QComboBox()

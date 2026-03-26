@@ -14,5 +14,6 @@ temp.py
 datablocks_user.json
 *.db
 *.csv
+*.log
 ws_visibility_config.json
 logging_settings.json

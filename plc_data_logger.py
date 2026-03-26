@@ -1,35 +1,100 @@
 from __future__ import annotations
 
-import csv
+import logging
 from datetime import datetime, timezone
+from logging.handlers import MemoryHandler
 from pathlib import Path
 from time import monotonic
 
-from PyQt6.QtCore import QObject
+from PyQt6.QtCore import QObject, QTimer
 
 from datablocks import plc_datablocks
 from data_broker import DataBroker
 from logging_config import LoggingSettingsStore
 
+FLUSH_INTERVAL_MS = 500
+
+logger = logging.getLogger(__name__)
+
+
+class TSVFormatter(logging.Formatter):
+    """Formats PLC data records as tab-separated timestamp/variable/value lines."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return f"{record.timestamp}\t{record.variable}\t{record.value}"
+
 
 class PLCDataLogger(QObject):
-    """Logs PLC variable values based on per-variable logging intervals."""
+    """Logs PLC variable values based on per-variable logging intervals.
+
+    Records are buffered via a MemoryHandler and flushed to disk
+    periodically (every FLUSH_INTERVAL_MS) to reduce I/O overhead.
+    """
 
     def __init__(self, broker: DataBroker, settings_store: LoggingSettingsStore, parent=None):
         super().__init__(parent)
         self._broker = broker
         self._settings_store = settings_store
         self._last_logged_ms: dict[str, int] = {}
+
+        self._data_logger = logging.getLogger("plc_data")
+        self._data_logger.setLevel(logging.INFO)
+        self._data_logger.propagate = False
+
+        self._file_handler: logging.FileHandler | None = None
+        self._memory_handler: MemoryHandler | None = None
+        self._current_file: str | None = None
+
         self._broker.data_updated.connect(self._on_data)
+
+        self._flush_timer = QTimer(self)
+        self._flush_timer.setInterval(FLUSH_INTERVAL_MS)
+        self._flush_timer.timeout.connect(self._flush)
+        self._flush_timer.start()
+
+    def _ensure_handler(self, output_file: str, include_header: bool) -> None:
+        """Set up or reconfigure the file handler when the output path changes."""
+        if self._current_file == output_file and self._memory_handler is not None:
+            return
+
+        # Flush and remove old handlers
+        for handler in self._data_logger.handlers[:]:
+            handler.flush()
+            handler.close()
+            self._data_logger.removeHandler(handler)
+
+        path = Path(output_file)
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parent / path
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file_exists = path.exists()
+
+        self._file_handler = logging.FileHandler(str(path), mode="a", encoding="utf-8")
+        self._file_handler.setFormatter(TSVFormatter())
+
+        self._memory_handler = MemoryHandler(
+            capacity=10000,
+            flushLevel=logging.CRITICAL + 1,  # only flush via timer
+            target=self._file_handler,
+        )
+        self._data_logger.addHandler(self._memory_handler)
+        self._current_file = output_file
+
+        if include_header and not file_exists:
+            self._file_handler.stream.write("timestamp_utc_ms\tvariable\tvalue\n")
 
     def _on_data(self, data: dict) -> None:
         settings = self._settings_store.get()
         if not settings.get("enabled", False):
             return
 
-        rows: list[list[str]] = []
+        self._ensure_handler(
+            str(settings.get("output_file", "plc_logs.log")),
+            bool(settings.get("include_header", True)),
+        )
+
         now_ms = int(monotonic() * 1000)
-        # Timestamp with ms precision in ISO format
         now_dt = datetime.now(timezone.utc)
         timestamp = now_dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
@@ -60,33 +125,16 @@ class PLCDataLogger(QObject):
                 if last_ms is not None and (now_ms - last_ms) < interval_ms:
                     continue
 
-                rows.append(
-                    [
-                        timestamp,
-                        f"{db_name}.{field_name}",
-                        str(db_values[field_name]),
-                    ]
+                self._data_logger.info(
+                    "",
+                    extra={
+                        "timestamp": timestamp,
+                        "variable": key,
+                        "value": str(db_values[field_name]),
+                    },
                 )
                 self._last_logged_ms[key] = now_ms
 
-        if rows:
-            self._append_rows(
-                output_file=str(settings.get("output_file", "plc_logs.csv")),
-                include_header=bool(settings.get("include_header", True)),
-                rows=rows,
-            )
-
-    @staticmethod
-    def _append_rows(output_file: str, include_header: bool, rows: list[list[str]]) -> None:
-        path = Path(output_file)
-        if not path.is_absolute():
-            path = Path(__file__).resolve().parent / path
-
-        path.parent.mkdir(parents=True, exist_ok=True)
-        file_exists = path.exists()
-
-        with path.open("a", encoding="utf-8", newline="") as handle:
-            writer = csv.writer(handle)
-            if include_header and not file_exists:
-                writer.writerow(["timestamp_utc_ms", "variable", "value"])
-            writer.writerows(rows)
+    def _flush(self) -> None:
+        if self._memory_handler:
+            self._memory_handler.flush()
