@@ -1,9 +1,9 @@
-// ---------- Graphs ----------
+// ---------- Graphs (Chart.js) ----------
 function scheduleGraphRedraw() {
     if (graphRedrawScheduled) return;
     graphRedrawScheduled = true;
     requestAnimationFrame(() => {
-        drawAllGraphs();
+        updateAllCharts();
         graphRedrawScheduled = false;
     });
 }
@@ -80,11 +80,102 @@ function getSeriesColor(fieldKey, idx) {
     return palette[seed % palette.length];
 }
 
+function destroyAllCharts() {
+    for (const id of Object.keys(chartInstances)) {
+        if (chartInstances[id]) {
+            chartInstances[id].destroy();
+            delete chartInstances[id];
+        }
+    }
+}
+
+function createChartInstance(canvas, graph, graphIndex) {
+    const ctx = canvas.getContext("2d");
+    const chart = new Chart(ctx, {
+        type: "line",
+        data: { datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                mode: "index",
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    type: "time",
+                    time: {
+                        tooltipFormat: "HH:mm:ss",
+                        displayFormats: {
+                            second: "HH:mm:ss",
+                            minute: "HH:mm",
+                            hour: "HH:mm",
+                        },
+                    },
+                    grid: { color: "#2a2d3a" },
+                    ticks: { color: "#888", maxRotation: 0, autoSkipPadding: 20 },
+                    border: { color: "#2a2d3a" },
+                },
+                y: {
+                    grid: { color: "#2a2d3a" },
+                    ticks: { color: "#888" },
+                    border: { color: "#2a2d3a" },
+                },
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: "top",
+                    labels: {
+                        color: "#cfd3dd",
+                        usePointStyle: true,
+                        pointStyle: "line",
+                        padding: 14,
+                        font: { size: 11 },
+                    },
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: "#1e2130",
+                    titleColor: "#cfd3dd",
+                    bodyColor: "#cfd3dd",
+                    borderColor: "#3a3f55",
+                    borderWidth: 1,
+                    padding: 10,
+                    callbacks: {
+                        label: function (context) {
+                            const v = context.parsed.y;
+                            return `${context.dataset.label}: ${v % 1 === 0 ? v : v.toFixed(3)}`;
+                        },
+                    },
+                },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: "x",
+                    },
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: "x",
+                    },
+                },
+            },
+        },
+    });
+
+    chartInstances[graph.id] = chart;
+    return chart;
+}
+
 function renderGraphs(data) {
     ensureGraphDefinitions();
 
     const list = document.getElementById("graph-list");
     if (!list) return;
+
+    destroyAllCharts();
     list.innerHTML = "";
 
     const graphFields = flattenData(data).filter((f) => typeof f.value === "boolean" || typeof f.value === "number");
@@ -107,12 +198,28 @@ function renderGraphs(data) {
             saveVisualizationPrefs();
         });
 
+        const headerBtns = document.createElement("div");
+        headerBtns.className = "graph-card-header-btns";
+
+        const resetZoomBtn = document.createElement("button");
+        resetZoomBtn.type = "button";
+        resetZoomBtn.className = "reset-zoom-btn";
+        resetZoomBtn.textContent = "Reset Zoom";
+        resetZoomBtn.addEventListener("click", () => {
+            const chart = chartInstances[graph.id];
+            if (chart) chart.resetZoom();
+        });
+
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
         removeBtn.className = "remove-graph-btn";
         removeBtn.textContent = "Remove";
         removeBtn.disabled = visualizationPrefs.graphs.length === 1;
         removeBtn.addEventListener("click", () => {
+            if (chartInstances[graph.id]) {
+                chartInstances[graph.id].destroy();
+                delete chartInstances[graph.id];
+            }
             visualizationPrefs.graphs = visualizationPrefs.graphs.filter((g) => g.id !== graph.id);
             ensureGraphDefinitions();
             pruneGraphHistory();
@@ -121,8 +228,10 @@ function renderGraphs(data) {
             scheduleGraphRedraw();
         });
 
+        headerBtns.appendChild(resetZoomBtn);
+        headerBtns.appendChild(removeBtn);
         header.appendChild(titleInput);
-        header.appendChild(removeBtn);
+        header.appendChild(headerBtns);
 
         const controls = document.createElement("div");
         controls.className = "graph-controls";
@@ -166,117 +275,70 @@ function renderGraphs(data) {
         summary.className = "graph-summary";
         summary.id = `graph-summary-${graph.id}`;
 
+        const canvasWrap = document.createElement("div");
+        canvasWrap.className = "graph-canvas-wrap";
+
         const canvas = document.createElement("canvas");
-        canvas.className = "graph-canvas";
         canvas.id = `graph-canvas-${graph.id}`;
-        canvas.width = 1200;
-        canvas.height = 320;
+
+        canvasWrap.appendChild(canvas);
 
         card.appendChild(header);
         card.appendChild(controls);
         card.appendChild(summary);
-        card.appendChild(canvas);
+        card.appendChild(canvasWrap);
         list.appendChild(card);
+
+        createChartInstance(canvas, graph, graphIdx);
     });
+
+    updateAllCharts();
 }
 
-function drawGraphCanvas(graph, graphIndex) {
-    const canvas = document.getElementById(`graph-canvas-${graph.id}`);
+function updateChartData(graph, graphIndex) {
+    const chart = chartInstances[graph.id];
+    if (!chart) return;
+
     const summary = document.getElementById(`graph-summary-${graph.id}`);
-    if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const selected = (graph.fieldKeys || []).filter(
+        (k) => Array.isArray(graphState.history[k]) && graphState.history[k].length
+    );
 
-    const dpr = window.devicePixelRatio || 1;
-    const cssWidth = canvas.clientWidth || 1200;
-    const cssHeight = canvas.clientHeight || 320;
-    canvas.width = Math.floor(cssWidth * dpr);
-    canvas.height = Math.floor(cssHeight * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    ctx.clearRect(0, 0, cssWidth, cssHeight);
-
-    const selected = (graph.fieldKeys || []).filter((k) => Array.isArray(graphState.history[k]) && graphState.history[k].length);
     if (!selected.length) {
         if (summary) summary.textContent = "No fields selected or no samples yet";
-        ctx.fillStyle = "#888";
-        ctx.font = "13px Segoe UI";
-        ctx.fillText("Select fields for this graph and wait for samples", 18, 26);
+        chart.data.datasets = [];
+        chart.update("none");
         return;
     }
 
     if (summary) summary.textContent = `${selected.length} field(s) plotted`;
 
-    const left = 44;
-    const top = 14;
-    const right = cssWidth - 14;
-    const bottom = cssHeight - 28;
-    const width = right - left;
-    const height = bottom - top;
-
-    let minT = Number.POSITIVE_INFINITY;
-    let maxT = Number.NEGATIVE_INFINITY;
-    let minV = Number.POSITIVE_INFINITY;
-    let maxV = Number.NEGATIVE_INFINITY;
-
-    selected.forEach((fieldKey) => {
-        graphState.history[fieldKey].forEach((p) => {
-            if (p.t < minT) minT = p.t;
-            if (p.t > maxT) maxT = p.t;
-            if (p.v < minV) minV = p.v;
-            if (p.v > maxV) maxV = p.v;
-        });
-    });
-
-    if (!Number.isFinite(minT) || !Number.isFinite(maxT)) return;
-    if (maxT === minT) maxT += 1000;
-    if (maxV === minV) {
-        minV -= 1;
-        maxV += 1;
-    }
-
-    ctx.strokeStyle = "#2a2d3a";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(left, top);
-    ctx.lineTo(left, bottom);
-    ctx.lineTo(right, bottom);
-    ctx.stroke();
-
-    ctx.fillStyle = "#888";
-    ctx.font = "11px Segoe UI";
-    ctx.fillText(maxV.toFixed(2), 4, top + 10);
-    ctx.fillText(minV.toFixed(2), 4, bottom - 2);
-
-    selected.forEach((fieldKey, idx) => {
+    chart.data.datasets = selected.map((fieldKey, idx) => {
         const color = getSeriesColor(fieldKey, graphIndex + idx);
-        const points = graphState.history[fieldKey];
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        points.forEach((p, i) => {
-            const x = left + ((p.t - minT) / (maxT - minT)) * width;
-            const y = bottom - ((p.v - minV) / (maxV - minV)) * height;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-
-        const legendY = top + 14 + idx * 14;
-        if (legendY < bottom - 2) {
-            ctx.fillStyle = color;
-            ctx.fillRect(right - 190, legendY - 8, 10, 2);
-            ctx.fillStyle = "#cfd3dd";
-            ctx.font = "11px Segoe UI";
-            ctx.fillText(fieldKey, right - 176, legendY - 2);
-        }
+        return {
+            label: fieldKey,
+            data: graphState.history[fieldKey].map((p) => ({ x: p.t, y: p.v })),
+            borderColor: color,
+            backgroundColor: color + "20",
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.3,
+            fill: false,
+        };
     });
+
+    chart.update("none");
+}
+
+function updateAllCharts() {
+    ensureGraphDefinitions();
+    visualizationPrefs.graphs.forEach((graph, idx) => updateChartData(graph, idx));
 }
 
 function drawAllGraphs() {
-    ensureGraphDefinitions();
-    visualizationPrefs.graphs.forEach((graph, idx) => drawGraphCanvas(graph, idx));
+    updateAllCharts();
 }
 
 function addGraph() {

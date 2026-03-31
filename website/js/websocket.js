@@ -190,7 +190,10 @@ function clearRenderedData(clearEditor = false) {
     if (viz) viz.innerHTML = "";
 
     const graphList = document.getElementById("graph-list");
-    if (graphList) graphList.innerHTML = "";
+    if (graphList) {
+        destroyAllCharts();
+        graphList.innerHTML = "";
+    }
 
     clearGraphHistory();
     drawAllGraphs();

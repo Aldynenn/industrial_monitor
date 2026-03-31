@@ -27,6 +27,8 @@ const graphState = {
     maxPoints: 240,
 };
 
+const chartInstances = {};
+
 let graphRedrawScheduled = false;
 
 // ---------- Packet interval tracking ----------
