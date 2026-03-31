@@ -33,9 +33,10 @@ class WebSocketServer:
         self._client_usernames: dict = {}
         self._client_roles: dict = {}
         self._client_last_sent: dict = {}  # websocket -> last sent (filtered) data
+        self._user_visibility_cache: dict = {}  # username -> normalized visibility config
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
-        self._visibility_config = self._load_visibility_config()
+        self._visibility_config = self._load_visibility_config()  # global default
 
         # Subscribe to broker updates
         self._broker.data_updated.connect(self._on_data)
@@ -107,13 +108,26 @@ class WebSocketServer:
                     json.dumps(
                         {
                             "type": "visibility_config",
-                            "config": self._visibility_config,
+                            "username": username,
+                            "config": self._get_effective_visibility(username),
+                        }
+                    )
+                )
+                viz = self._auth_store.get_user_visualization(username)
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "type": "graphs_config",
+                            "username": username,
+                            "graphs": viz["graphs"],
+                            "boolActiveColors": viz["boolActiveColors"],
                         }
                     )
                 )
                 latest = self._broker.latest
                 if latest:
-                    filtered = self._apply_visibility(latest, self._visibility_config)
+                    user_vis = self._get_effective_visibility(username)
+                    filtered = self._apply_visibility(latest, user_vis)
                     self._client_last_sent[websocket] = filtered
                     await websocket.send(json.dumps({"type": "plc_data", "data": filtered, "full": True}, default=str))
             else:
@@ -132,11 +146,21 @@ class WebSocketServer:
             return
 
         if msg_type == "visibility_get":
+            caller_role = self._client_roles.get(websocket)
+            caller_name = self._client_usernames.get(websocket, "")
+            target = str(payload.get("username", "")).strip()
+            if target and target != caller_name and caller_role != "admin":
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "Admin role required to view other users' visibility."})
+                )
+                return
+            username = target if target else caller_name
             await websocket.send(
                 json.dumps(
                     {
                         "type": "visibility_config",
-                        "config": self._visibility_config,
+                        "username": username,
+                        "config": self._get_effective_visibility(username),
                     }
                 )
             )
@@ -167,30 +191,119 @@ class WebSocketServer:
                 )
                 return
 
-            self._visibility_config = self._normalize_visibility_config(config_payload)
-            self._save_visibility_config(self._visibility_config)
-            # Invalidate cached state so all clients get a full resend
-            self._client_last_sent.clear()
+            target = str(payload.get("username", "")).strip()
+            if not target:
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "message": "Target username is required.",
+                        }
+                    )
+                )
+                return
+
+            normalized = self._normalize_visibility_config(config_payload)
+            self._auth_store.set_user_visibility(target, normalized)
+            self._user_visibility_cache[target] = normalized
+            # Invalidate cached state for this user's connections so they get a full resend
+            for ws in list(self._authenticated_clients):
+                if self._client_usernames.get(ws) == target:
+                    self._client_last_sent.pop(ws, None)
             await websocket.send(
                 json.dumps(
                     {
                         "type": "visibility_set",
                         "ok": True,
-                        "message": "Visibility updated.",
+                        "message": f"Visibility updated for '{target}'.",
                     }
                 )
             )
-            await self._broadcast(
-                json.dumps(
-                    {
-                        "type": "visibility_config",
-                        "config": self._visibility_config,
-                    }
-                )
-            )
+            # Push updated config to the target user if they're connected
+            for ws in list(self._authenticated_clients):
+                if self._client_usernames.get(ws) == target:
+                    try:
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "type": "visibility_config",
+                                    "username": target,
+                                    "config": normalized,
+                                }
+                            )
+                        )
+                    except Exception:
+                        pass
+            # Re-broadcast data with new filtering for affected user
             latest = self._broker.latest
             if latest:
                 await self._broadcast_data(latest)
+            return
+
+        if msg_type == "graphs_get":
+            target = str(payload.get("username", "")).strip()
+            caller_role = self._client_roles.get(websocket)
+            caller_name = self._client_usernames.get(websocket, "")
+            if target and target != caller_name and caller_role != "admin":
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "Admin role required to view other users' graphs."})
+                )
+                return
+            username = target if target else caller_name
+            viz = self._auth_store.get_user_visualization(username)
+            await websocket.send(
+                json.dumps({"type": "graphs_config", "username": username, "graphs": viz["graphs"], "boolActiveColors": viz["boolActiveColors"]})
+            )
+            return
+
+        if msg_type == "graphs_set":
+            caller_role = self._client_roles.get(websocket)
+            if caller_role != "admin":
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "Admin role required to manage graphs."})
+                )
+                return
+            target = str(payload.get("username", "")).strip()
+            if not target:
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "Target username is required."})
+                )
+                return
+            graphs = payload.get("graphs")
+            bool_colors = payload.get("boolActiveColors")
+            if not isinstance(graphs, list):
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "graphs must be an array."})
+                )
+                return
+            if not isinstance(bool_colors, dict):
+                bool_colors = {}
+            self._auth_store.set_user_visualization(target, graphs, bool_colors)
+            await websocket.send(
+                json.dumps({"type": "graphs_set", "ok": True, "message": f"Graphs saved for '{target}'."})
+            )
+            # Push updated config to the target user if they're connected
+            for ws in list(self._authenticated_clients):
+                if self._client_usernames.get(ws) == target:
+                    try:
+                        await ws.send(
+                            json.dumps({"type": "graphs_config", "username": target, "graphs": graphs, "boolActiveColors": bool_colors})
+                        )
+                    except Exception:
+                        pass
+            return
+
+        if msg_type == "users_list":
+            caller_role = self._client_roles.get(websocket)
+            if caller_role != "admin":
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "Admin role required."})
+                )
+                return
+            usernames = self._auth_store.list_usernames()
+            await websocket.send(
+                json.dumps({"type": "users_list", "usernames": usernames})
+            )
             return
 
         logger.info("Received from %s: %s", self._client_usernames.get(websocket, '?'), payload)
@@ -214,9 +327,11 @@ class WebSocketServer:
                 self._authenticated_clients.discard(ws)
 
     async def _broadcast_data(self, data: dict):
-        filtered = self._apply_visibility(data, self._visibility_config)
         for ws in list(self._authenticated_clients):
             try:
+                username = self._client_usernames.get(ws, "")
+                user_vis = self._get_effective_visibility(username)
+                filtered = self._apply_visibility(data, user_vis)
                 last = self._client_last_sent.get(ws)
                 if last is None:
                     # First message for this client — send full snapshot
@@ -261,6 +376,17 @@ class WebSocketServer:
         if not isinstance(raw, dict):
             return {}
         return self._normalize_visibility_config(raw)
+
+    def _get_effective_visibility(self, username: str) -> dict:
+        """Return per-user visibility config, falling back to the global default."""
+        if username in self._user_visibility_cache:
+            return self._user_visibility_cache[username]
+        per_user = self._auth_store.get_user_visibility(username)
+        if per_user:
+            normalized = self._normalize_visibility_config(per_user)
+            self._user_visibility_cache[username] = normalized
+            return normalized
+        return self._visibility_config
 
     def _save_visibility_config(self, config: dict) -> None:
         try:

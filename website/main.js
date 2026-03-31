@@ -24,7 +24,9 @@ let visualizationPrefs = {
 
 const graphState = {
     history: {},
-    maxPoints: 240,
+    maxPoints: 500,
+    sweepStart: null,
+    sweepDuration: 10000,
 };
 
 let graphRedrawScheduled = false;
@@ -373,6 +375,7 @@ function getAllSelectedGraphFieldKeys() {
 
 function clearGraphHistory() {
     graphState.history = {};
+    graphState.sweepStart = null;
 }
 
 function pruneGraphHistory() {
@@ -389,7 +392,17 @@ function updateGraphHistory(data) {
     const selected = getAllSelectedGraphFieldKeys();
     if (!selected.size) return false;
 
+    if (graphState.sweepStart === null) {
+        graphState.sweepStart = now;
+    } else if (now - graphState.sweepStart >= graphState.sweepDuration) {
+        graphState.sweepStart = now;
+        for (const key of Object.keys(graphState.history)) {
+            graphState.history[key] = [];
+        }
+    }
+
     let appended = false;
+    const elapsed = (now - graphState.sweepStart) / 1000;
 
     const flattened = flattenData(data);
     for (const item of flattened) {
@@ -399,7 +412,7 @@ function updateGraphHistory(data) {
         if (typeof item.value === "boolean") numericValue = item.value ? 1 : 0;
         if (numericValue === null) continue;
         if (!graphState.history[item.fieldKey]) graphState.history[item.fieldKey] = [];
-        graphState.history[item.fieldKey].push({ t: now, v: numericValue });
+        graphState.history[item.fieldKey].push({ t: elapsed, v: numericValue });
         appended = true;
         if (graphState.history[item.fieldKey].length > graphState.maxPoints) {
             graphState.history[item.fieldKey].shift();
@@ -553,22 +566,19 @@ function drawGraphCanvas(graph, graphIndex) {
     const width = right - left;
     const height = bottom - top;
 
-    let minT = Number.POSITIVE_INFINITY;
-    let maxT = Number.NEGATIVE_INFINITY;
+    let minT = 0;
+    let maxT = graphState.sweepDuration / 1000;
     let minV = Number.POSITIVE_INFINITY;
     let maxV = Number.NEGATIVE_INFINITY;
 
     selected.forEach((fieldKey) => {
         graphState.history[fieldKey].forEach((p) => {
-            if (p.t < minT) minT = p.t;
-            if (p.t > maxT) maxT = p.t;
             if (p.v < minV) minV = p.v;
             if (p.v > maxV) maxV = p.v;
         });
     });
 
-    if (!Number.isFinite(minT) || !Number.isFinite(maxT)) return;
-    if (maxT === minT) maxT += 1000;
+    if (!Number.isFinite(minV)) return;
     if (maxV === minV) {
         minV -= 1;
         maxV += 1;

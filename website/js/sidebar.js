@@ -21,6 +21,7 @@ function clearLoginInputs() {
 
 function showAdminPanel(show) {
     const panel = document.getElementById("admin-details");
-    if (!panel) return;
-    panel.classList.toggle("hidden", !show);
+    if (panel) panel.classList.toggle("hidden", !show);
+    const graphPanel = document.getElementById("admin-graph-details");
+    if (graphPanel) graphPanel.classList.toggle("hidden", !show);
 }

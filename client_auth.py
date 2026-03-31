@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import sqlite3
 import threading
@@ -45,6 +46,27 @@ class ClientAuthStore:
                     """
                 )
                 self._ensure_schema(conn)
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_visualization (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT NOT NULL UNIQUE,
+                        graphs TEXT NOT NULL DEFAULT '[]',
+                        bool_active_colors TEXT NOT NULL DEFAULT '{}',
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_visibility (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT NOT NULL UNIQUE,
+                        config TEXT NOT NULL DEFAULT '{}',
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -213,6 +235,93 @@ class ClientAuthStore:
                 )
                 conn.commit()
                 return True, "Authenticated.", row["role"]
+            finally:
+                conn.close()
+
+    # ---- Visualization config per user ----
+
+    def get_user_visualization(self, username: str) -> dict:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT graphs, bool_active_colors FROM user_visualization WHERE username = ?",
+                    (username,),
+                ).fetchone()
+                if row is None:
+                    return {"graphs": [], "boolActiveColors": {}}
+                graphs = json.loads(row["graphs"]) if row["graphs"] else []
+                colors = json.loads(row["bool_active_colors"]) if row["bool_active_colors"] else {}
+                return {"graphs": graphs, "boolActiveColors": colors}
+            finally:
+                conn.close()
+
+    def set_user_visualization(self, username: str, graphs: list, bool_active_colors: dict) -> None:
+        now = self._now_iso()
+        graphs_json = json.dumps(graphs)
+        colors_json = json.dumps(bool_active_colors)
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO user_visualization (username, graphs, bool_active_colors, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(username) DO UPDATE SET
+                        graphs = excluded.graphs,
+                        bool_active_colors = excluded.bool_active_colors,
+                        updated_at = excluded.updated_at
+                    """,
+                    (username, graphs_json, colors_json, now),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    # ---- Visibility config per user ----
+
+    def get_user_visibility(self, username: str) -> dict:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT config FROM user_visibility WHERE username = ?",
+                    (username,),
+                ).fetchone()
+                if row is None:
+                    return {}
+                return json.loads(row["config"]) if row["config"] else {}
+            finally:
+                conn.close()
+
+    def set_user_visibility(self, username: str, config: dict) -> None:
+        now = self._now_iso()
+        config_json = json.dumps(config)
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO user_visibility (username, config, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(username) DO UPDATE SET
+                        config = excluded.config,
+                        updated_at = excluded.updated_at
+                    """,
+                    (username, config_json, now),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def list_usernames(self) -> list[str]:
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT username FROM clients WHERE is_active = 1 ORDER BY username COLLATE NOCASE ASC"
+                ).fetchall()
+                return [row["username"] for row in rows]
             finally:
                 conn.close()
 

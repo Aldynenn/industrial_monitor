@@ -30,7 +30,7 @@
       "il07": true,
       "il08": true,
       "etimer_duration": false,
-      "btn_green": false
+      "btn_green": true
     },
     "led_counter": {
       "PV": true,
@@ -57,8 +57,8 @@
     "flash_timer_off_02": {
       "PT": true,
       "ET": true,
-      "IN": false,
-      "Q": true
+      "Q": true,
+      "IN": false
     },
     "RuntimeDB": {
       "memory": true,

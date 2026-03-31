@@ -210,7 +210,8 @@ h1 { font-size: 1.5rem; font-weight: 600; }
 }
 
 #save-visibility-btn, #clear-graph-btn { background: var(--amber); color: #121212; }
-#add-graph-btn { background: var(--blue); color: #fff; }
+#admin-add-graph-btn { background: var(--blue); color: #fff; }
+#admin-save-graphs-btn { background: var(--green); color: #121212; }
 
 .visibility-editor { display: grid; gap: 0.75rem; }
 
@@ -313,6 +314,54 @@ h1 { font-size: 1.5rem; font-weight: 600; }
     background: #1a2040; color: #8fa4d4;
     border: 1px solid #2e3a5a;
     font-size: 0.75rem;
+}
+
+.graph-title-label {
+    font-size: 0.88rem; font-weight: 600; color: var(--text);
+}
+
+.graph-field-list {
+    font-size: 0.75rem; color: var(--muted);
+    margin-bottom: 0.5rem;
+    font-style: italic;
+}
+
+.graph-empty-hint {
+    color: var(--muted); font-size: 0.85rem;
+    padding: 1rem 0;
+}
+
+/* ---------- Admin graph editor (sidebar) ---------- */
+
+.admin-graph-user-select {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.admin-graph-label { font-size: 0.85rem; color: var(--muted); }
+
+.admin-graph-dropdown {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.82rem;
+    padding: 0.35rem 0.55rem;
+    flex: 1;
+}
+
+.admin-graph-editor { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
+
+.admin-graph-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.65rem;
+    background: #151926;
+}
+
+.admin-graph-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 0.5rem; margin-bottom: 0.5rem;
 }
 
 /* ---------- Datablock sections ---------- */

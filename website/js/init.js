@@ -4,12 +4,12 @@ document.getElementById("clear-graph-btn")?.addEventListener("click", () => {
     clearGraphHistory();
     scheduleGraphRedraw();
 });
-document.getElementById("add-graph-btn")?.addEventListener("click", addGraph);
+document.getElementById("admin-add-graph-btn")?.addEventListener("click", adminAddGraph);
+document.getElementById("admin-save-graphs-btn")?.addEventListener("click", adminSaveGraphs);
 window.addEventListener("resize", () => {
     scheduleGraphRedraw();
 });
 
-loadVisualizationPrefs();
 setAuthenticated(false, "Not authenticated");
 setRole("-");
 drawAllGraphs();

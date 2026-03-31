@@ -12,17 +12,6 @@ function ensureGraphDefinitions() {
     if (!Array.isArray(visualizationPrefs.graphs)) {
         visualizationPrefs.graphs = [];
     }
-    if (!visualizationPrefs.graphs.length) {
-        visualizationPrefs.graphs.push(createGraphDefinition("Graph 1"));
-    }
-}
-
-function createGraphDefinition(name) {
-    return {
-        id: `graph_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
-        name: name || `Graph ${visualizationPrefs.graphs.length + 1}`,
-        fieldKeys: [],
-    };
 }
 
 function getAllSelectedGraphFieldKeys() {
@@ -35,6 +24,7 @@ function getAllSelectedGraphFieldKeys() {
 
 function clearGraphHistory() {
     graphState.history = {};
+    graphState.sweepStart = null;
 }
 
 function pruneGraphHistory() {
@@ -51,7 +41,19 @@ function updateGraphHistory(data) {
     const selected = getAllSelectedGraphFieldKeys();
     if (!selected.size) return false;
 
+    // Initialize or reset sweep when 10s window is exceeded
+    if (graphState.sweepStart === null) {
+        graphState.sweepStart = now;
+    } else if (now - graphState.sweepStart >= graphState.sweepDuration) {
+        graphState.sweepStart = now;
+        // Clear all history to restart from the left
+        for (const key of Object.keys(graphState.history)) {
+            graphState.history[key] = [];
+        }
+    }
+
     let appended = false;
+    const elapsed = (now - graphState.sweepStart) / 1000; // seconds into sweep
 
     const flattened = flattenData(data);
     for (const item of flattened) {
@@ -61,7 +63,7 @@ function updateGraphHistory(data) {
         if (typeof item.value === "boolean") numericValue = item.value ? 1 : 0;
         if (numericValue === null) continue;
         if (!graphState.history[item.fieldKey]) graphState.history[item.fieldKey] = [];
-        graphState.history[item.fieldKey].push({ t: now, v: numericValue });
+        graphState.history[item.fieldKey].push({ t: elapsed, v: numericValue });
         appended = true;
         if (graphState.history[item.fieldKey].length > graphState.maxPoints) {
             graphState.history[item.fieldKey].shift();
@@ -104,14 +106,13 @@ function createChartInstance(canvas, graph, graphIndex) {
             },
             scales: {
                 x: {
-                    type: "time",
-                    time: {
-                        tooltipFormat: "HH:mm:ss",
-                        displayFormats: {
-                            second: "HH:mm:ss",
-                            minute: "HH:mm",
-                            hour: "HH:mm",
-                        },
+                    type: "linear",
+                    min: 0,
+                    max: graphState.sweepDuration / 1000,
+                    title: {
+                        display: true,
+                        text: "Time (s)",
+                        color: "#888",
                     },
                     grid: { color: "#2a2d3a" },
                     ticks: { color: "#888", maxRotation: 0, autoSkipPadding: 20 },
@@ -144,6 +145,10 @@ function createChartInstance(canvas, graph, graphIndex) {
                     borderWidth: 1,
                     padding: 10,
                     callbacks: {
+                        title: function (items) {
+                            if (items.length) return `${items[0].parsed.x.toFixed(2)}s`;
+                            return "";
+                        },
                         label: function (context) {
                             const v = context.parsed.y;
                             return `${context.dataset.label}: ${v % 1 === 0 ? v : v.toFixed(3)}`;
@@ -172,13 +177,24 @@ function createChartInstance(canvas, graph, graphIndex) {
 function renderGraphs(data) {
     ensureGraphDefinitions();
 
+    const panel = document.getElementById("graph-panel");
     const list = document.getElementById("graph-list");
     if (!list) return;
 
     destroyAllCharts();
     list.innerHTML = "";
 
-    const graphFields = flattenData(data).filter((f) => typeof f.value === "boolean" || typeof f.value === "number");
+    if (!visualizationPrefs.graphs.length) {
+        if (panel) {
+            const hint = document.createElement("p");
+            hint.className = "graph-empty-hint";
+            hint.textContent = role === "admin"
+                ? "No graphs configured. Use the Graph Configuration panel in Settings to add graphs."
+                : "No graphs have been configured for your account. Contact an administrator.";
+            list.appendChild(hint);
+        }
+        return;
+    }
 
     visualizationPrefs.graphs.forEach((graph, graphIdx) => {
         const card = document.createElement("article");
@@ -188,15 +204,9 @@ function renderGraphs(data) {
         const header = document.createElement("div");
         header.className = "graph-card-header";
 
-        const titleInput = document.createElement("input");
-        titleInput.className = "graph-title-input";
-        titleInput.type = "text";
-        titleInput.value = graph.name;
-        titleInput.placeholder = `Graph ${graphIdx + 1}`;
-        titleInput.addEventListener("change", () => {
-            graph.name = titleInput.value.trim() || `Graph ${graphIdx + 1}`;
-            saveVisualizationPrefs();
-        });
+        const titleEl = document.createElement("span");
+        titleEl.className = "graph-title-label";
+        titleEl.textContent = graph.name || `Graph ${graphIdx + 1}`;
 
         const headerBtns = document.createElement("div");
         headerBtns.className = "graph-card-header-btns";
@@ -210,65 +220,16 @@ function renderGraphs(data) {
             if (chart) chart.resetZoom();
         });
 
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "remove-graph-btn";
-        removeBtn.textContent = "Remove";
-        removeBtn.disabled = visualizationPrefs.graphs.length === 1;
-        removeBtn.addEventListener("click", () => {
-            if (chartInstances[graph.id]) {
-                chartInstances[graph.id].destroy();
-                delete chartInstances[graph.id];
-            }
-            visualizationPrefs.graphs = visualizationPrefs.graphs.filter((g) => g.id !== graph.id);
-            ensureGraphDefinitions();
-            pruneGraphHistory();
-            saveVisualizationPrefs();
-            renderGraphs(latestData);
-            scheduleGraphRedraw();
-        });
-
         headerBtns.appendChild(resetZoomBtn);
-        headerBtns.appendChild(removeBtn);
-        header.appendChild(titleInput);
+        header.appendChild(titleEl);
         header.appendChild(headerBtns);
 
-        const controls = document.createElement("div");
-        controls.className = "graph-controls";
-
-        if (!graphFields.length) {
-            const row = document.createElement("div");
-            row.className = "graph-control-row";
-            row.textContent = "No numeric/boolean fields available";
-            controls.appendChild(row);
+        const fieldList = document.createElement("div");
+        fieldList.className = "graph-field-list";
+        if (graph.fieldKeys && graph.fieldKeys.length) {
+            fieldList.textContent = graph.fieldKeys.join(", ");
         } else {
-            graphFields.forEach((f) => {
-                const row = document.createElement("label");
-                row.className = "graph-control-row";
-
-                const label = document.createElement("span");
-                label.textContent = `${f.dbName}.${f.fieldName}`;
-
-                const cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.checked = graph.fieldKeys.includes(f.fieldKey);
-                cb.addEventListener("change", () => {
-                    if (cb.checked) {
-                        if (!graph.fieldKeys.includes(f.fieldKey)) {
-                            graph.fieldKeys.push(f.fieldKey);
-                        }
-                    } else {
-                        graph.fieldKeys = graph.fieldKeys.filter((k) => k !== f.fieldKey);
-                    }
-                    pruneGraphHistory();
-                    saveVisualizationPrefs();
-                    scheduleGraphRedraw();
-                });
-
-                row.appendChild(label);
-                row.appendChild(cb);
-                controls.appendChild(row);
-            });
+            fieldList.textContent = "No fields assigned";
         }
 
         const summary = document.createElement("div");
@@ -284,7 +245,7 @@ function renderGraphs(data) {
         canvasWrap.appendChild(canvas);
 
         card.appendChild(header);
-        card.appendChild(controls);
+        card.appendChild(fieldList);
         card.appendChild(summary);
         card.appendChild(canvasWrap);
         list.appendChild(card);
@@ -339,12 +300,4 @@ function updateAllCharts() {
 
 function drawAllGraphs() {
     updateAllCharts();
-}
-
-function addGraph() {
-    ensureGraphDefinitions();
-    visualizationPrefs.graphs.push(createGraphDefinition(`Graph ${visualizationPrefs.graphs.length + 1}`));
-    saveVisualizationPrefs();
-    renderGraphs(latestData);
-    scheduleGraphRedraw();
 }

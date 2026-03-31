@@ -9,12 +9,13 @@ let ws = null;
 let uiBuilt = false;
 let isAuthenticated = false;
 let role = "user";
+let currentUsername = "";
 let latestData = {};
 let visibilityConfig = {};
 let visibilityEditorInitialized = false;
 let vizSettingsInitialized = false;
+let graphConfigInitialized = false;
 
-const LOCAL_PREFS_KEY = "industrial_monitor_visualization";
 const DEFAULT_BOOL_ACTIVE_COLOR = "#22c55e";
 
 let visualizationPrefs = {
@@ -22,9 +23,20 @@ let visualizationPrefs = {
     graphs: [],
 };
 
+// Admin graph management state
+let adminUserList = [];
+let adminSelectedUser = "";
+let adminEditingPrefs = { graphs: [], boolActiveColors: {} };
+
+// Admin visibility management state
+let adminVisSelectedUser = "";
+let adminVisEditingConfig = {};
+
 const graphState = {
     history: {},
-    maxPoints: 240,
+    maxPoints: 500,
+    sweepStart: null,
+    sweepDuration: 10000, // 10 seconds in ms
 };
 
 const chartInstances = {};

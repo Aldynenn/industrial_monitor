@@ -34,6 +34,7 @@ function connect() {
         setConnected(false);
         setAuthenticated(false, "Not authenticated");
         setRole("-");
+        currentUsername = "";
         showAdminPanel(false);
         showLoginPanel(true);
         document.getElementById("disconnect-btn")?.classList.add("hidden");
@@ -86,17 +87,22 @@ function handleMessage(payload) {
 
     if (payload.type === "auth") {
         if (payload.ok) {
+            currentUsername = document.getElementById("ws-username").value.trim();
             setAuthenticated(true, "Authenticated");
             setRole(payload.role || "user");
             showAdminPanel((payload.role || "user") === "admin");
             showLoginPanel(false);
             clearLoginInputs();
             document.getElementById("disconnect-btn")?.classList.remove("hidden");
-            document.getElementById("sidebar-toggle-btn")?.classList.remove("hidden");
             document.getElementById("avg-interval-label")?.classList.remove("hidden");
+            if ((payload.role || "user") === "admin") {
+                document.getElementById("sidebar-toggle-btn")?.classList.remove("hidden");
+                requestUserList();
+            }
             requestVisibilityConfig();
             log(payload.message || "Authentication successful", "info");
         } else {
+            currentUsername = "";
             setAuthenticated(false, payload.message || "Authentication failed");
             setRole("-");
             showAdminPanel(false);
@@ -106,7 +112,7 @@ function handleMessage(payload) {
     }
 
     if (payload.type === "visibility_config") {
-        visibilityConfig = payload.config && typeof payload.config === "object" ? payload.config : {};
+        applyVisibilityConfig(payload);
         maybeInitVisibilityEditor(latestData, visibilityConfig);
         log("Visibility configuration updated", "info");
         return;
@@ -117,6 +123,24 @@ function handleMessage(payload) {
             clearRenderedData(false);
         }
         log(payload.message || "Visibility updated", payload.ok ? "info" : "error");
+        return;
+    }
+
+    if (payload.type === "graphs_config") {
+        graphConfigInitialized = true;
+        applyGraphConfig(payload);
+        log(`Graph config received for '${payload.username || "self"}'`, "info");
+        return;
+    }
+
+    if (payload.type === "graphs_set") {
+        log(payload.message || "Graphs saved", payload.ok ? "info" : "error");
+        return;
+    }
+
+    if (payload.type === "users_list") {
+        applyUserList(payload.usernames);
+        renderVisibilityUserSelector();
         return;
     }
 
@@ -167,9 +191,11 @@ function handleMessage(payload) {
     }
 }
 
-function requestVisibilityConfig() {
+function requestVisibilityConfig(username) {
     if (!ws || ws.readyState !== WebSocket.OPEN || !isAuthenticated) return;
-    ws.send(JSON.stringify({ type: "visibility_get" }));
+    const msg = { type: "visibility_get" };
+    if (username) msg.username = username;
+    ws.send(JSON.stringify(msg));
 }
 
 function clearRenderedData(clearEditor = false) {
@@ -183,6 +209,20 @@ function clearRenderedData(clearEditor = false) {
         visibilityEditorInitialized = false;
         const editor = document.getElementById("visibility-editor");
         if (editor) editor.innerHTML = "";
+
+        adminVisSelectedUser = "";
+        adminVisEditingConfig = {};
+        const visUserSelect = document.getElementById("visibility-user-select");
+        if (visUserSelect) visUserSelect.innerHTML = "";
+
+        graphConfigInitialized = false;
+        adminUserList = [];
+        adminSelectedUser = "";
+        adminEditingPrefs = { graphs: [], boolActiveColors: {} };
+        const adminGraphEditor = document.getElementById("admin-graph-editor");
+        if (adminGraphEditor) adminGraphEditor.innerHTML = "";
+        const adminUserSelect = document.getElementById("admin-graph-user-select");
+        if (adminUserSelect) adminUserSelect.innerHTML = "";
     }
 
     vizSettingsInitialized = false;
