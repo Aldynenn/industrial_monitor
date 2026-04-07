@@ -172,10 +172,34 @@ def handle_run(args: argparse.Namespace) -> None:
 # Argument parser
 # ---------------------------------------------------------------------------
 
+def _collect_subparser_help(parser: argparse.ArgumentParser, prefix: str = "") -> str:
+    """Recursively collect formatted help for all subcommands."""
+    lines: list[str] = []
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, subparser in action.choices.items():
+                full_cmd = f"{prefix} {name}".strip()
+                desc = ""
+                for choice_action in action._choices_actions:
+                    if choice_action.dest == name:
+                        desc = choice_action.help or ""
+                        break
+                lines.append(f"\n{full_cmd:<25} {desc}")
+                for sub_action in subparser._actions:
+                    if isinstance(sub_action, (argparse._HelpAction, argparse._SubParsersAction)):
+                        continue
+                    opts = ", ".join(sub_action.option_strings) if sub_action.option_strings else sub_action.dest
+                    help_text = sub_action.help or ""
+                    lines.append(f"  {opts:<25} {help_text}")
+                lines.append(_collect_subparser_help(subparser, full_cmd))
+    return "\n".join(lines)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="industrial_monitor",
         description="Industrial Monitor – PLC data acquisition and WebSocket server",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -223,6 +247,8 @@ def build_parser() -> argparse.ArgumentParser:
     pw_p = client_sub.add_parser("set-password", help="Update a client's password")
     pw_p.add_argument("id", type=int, help="Client ID")
     pw_p.add_argument("password", help="New password (min 8 chars, upper+lower+digit)")
+
+    parser.epilog = "commands and arguments:" + _collect_subparser_help(parser)
 
     return parser
 
