@@ -156,6 +156,7 @@ def handle_run(args: argparse.Namespace) -> None:
     def _shutdown(*_args):
         logger.info("Shutting down...")
         worker.stop()
+        done.set()
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
@@ -163,7 +164,9 @@ def handle_run(args: argparse.Namespace) -> None:
     logger.info("Starting headless mode – PLC %s:%s/%s, WS port %s", ip, rack, slot, args.port)
     worker.start()
 
-    done.wait()
+    # Use a timeout loop so signal handlers can fire on Windows
+    while not done.wait(timeout=1):
+        pass
     worker.join(timeout=3)
     data_logger.stop()
 
