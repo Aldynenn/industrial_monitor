@@ -9,6 +9,7 @@ def main_gui():
     from config import SettingsStore
     from gui import MainWindow
     from tray_icon import TrayIcon
+    from web_server import StaticWebServer
     from ws_server import WebSocketServer
 
     app = QApplication(sys.argv)
@@ -21,6 +22,10 @@ def main_gui():
     tray = TrayIcon(window)
     tray.show()
     window._tray = tray
+
+    web_port = settings_store.get().get("web_server", {}).get("port", 8080)
+    web = StaticWebServer(port=web_port)
+    web.start()
 
     ws = WebSocketServer(window.broker, auth_store=auth_store,
                          settings_store=settings_store, port=8765)
