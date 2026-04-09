@@ -21,13 +21,16 @@ function scheduleReconnect() {
 }
 
 function toggleConnection() {
-    if (ws && ws.readyState <= WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
         _manualDisconnect = true;
         cancelReconnect();
         ws.close();
     } else {
         _manualDisconnect = false;
         cancelReconnect();
+        if (ws && ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+        }
         connect();
     }
 }

@@ -36,6 +36,7 @@ class WebSocketServer:
         self._user_visibility_cache: dict = {}  # username -> normalized visibility config
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
+        self._stop_event: asyncio.Event | None = None
         self._visibility_config = self._load_visibility_config()  # global default
 
         # Subscribe to broker updates
@@ -49,20 +50,25 @@ class WebSocketServer:
     def _run_loop(self):
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
-        self._loop.run_until_complete(self._serve())
+        self._stop_event = asyncio.Event()
+        try:
+            self._loop.run_until_complete(self._serve())
+        finally:
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.close()
 
     def stop(self):
         """Gracefully shut down the WebSocket server."""
-        if self._loop and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._loop and self._stop_event:
+            self._loop.call_soon_threadsafe(self._stop_event.set)
         if self._thread:
-            self._thread.join(timeout=3)
+            self._thread.join(timeout=5)
             logger.info("WebSocket server stopped.")
 
     async def _serve(self):
         async with serve(self._handler, self._host, self._port):
             logger.info("WebSocket server listening on ws://%s:%s", self._host, self._port)
-            await asyncio.Future()  # run forever
+            await self._stop_event.wait()
 
     async def _handler(self, websocket):
         self._clients.add(websocket)
