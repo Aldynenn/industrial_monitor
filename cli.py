@@ -111,6 +111,7 @@ def handle_run(args: argparse.Namespace) -> None:
     from config import SettingsStore
     from plc_communication import HeadlessPLCWorker
     from plc_data_logger import HeadlessPLCDataLogger
+    from web_server import StaticWebServer
     from ws_server import WebSocketServer
 
     auth_store = ClientAuthStore()
@@ -118,6 +119,11 @@ def handle_run(args: argparse.Namespace) -> None:
     broker = DataBroker()
 
     data_logger = HeadlessPLCDataLogger(broker, settings_store)
+
+    settings = settings_store.get()
+    web_port = settings.get("web_server", {}).get("port", 8080)
+    web = StaticWebServer(port=web_port)
+    web.start()
 
     ws = WebSocketServer(broker, auth_store=auth_store,
                          settings_store=settings_store, port=args.port)
@@ -169,6 +175,7 @@ def handle_run(args: argparse.Namespace) -> None:
         pass
     worker.join(timeout=3)
     data_logger.stop()
+    web.stop()
 
 
 # ---------------------------------------------------------------------------

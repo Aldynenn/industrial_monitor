@@ -449,3 +449,38 @@ h1 { font-size: 1.5rem; font-weight: 600; }
 #log .entry { white-space: pre; }
 #log .entry.error { color: var(--red); }
 #log .entry.info  { color: var(--blue); }
+
+/* ---------- Toast Banner ---------- */
+
+.toast-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1.25rem;
+    background: var(--amber);
+    color: #000;
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-align: center;
+    animation: slideDown 0.25s ease-out;
+}
+.toast-banner.hidden { display: none !important; }
+.toast-dismiss {
+    background: transparent;
+    color: #000;
+    font-size: 1.1rem;
+    padding: 0 0.4rem;
+    line-height: 1;
+    cursor: pointer;
+    border: none;
+}
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to   { transform: translateY(0); }
+}

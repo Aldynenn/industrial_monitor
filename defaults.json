@@ -13,5 +13,8 @@
     "web_server": {
         "port": 8080
     },
+    "ws_server": {
+        "port": 8765
+    },
     "ws_visibility": {}
 }

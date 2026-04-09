@@ -1,4 +1,20 @@
 // ---------- Utility functions ----------
+
+// ---------- Toast helpers ----------
+function showToast(message) {
+    const banner = document.getElementById("toast-banner");
+    const msgEl = document.getElementById("toast-message");
+    if (banner && msgEl) {
+        msgEl.textContent = message;
+        banner.classList.remove("hidden");
+    }
+}
+
+function hideToast() {
+    const banner = document.getElementById("toast-banner");
+    if (banner) banner.classList.add("hidden");
+}
+
 function recordPacketArrival() {
     const now = performance.now();
     if (_lastPacketTime !== null) {

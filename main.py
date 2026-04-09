@@ -23,13 +23,18 @@ def main_gui():
     tray.show()
     window._tray = tray
 
-    web_port = settings_store.get().get("web_server", {}).get("port", 8080)
+    settings = settings_store.get()
+    web_port = settings.get("web_server", {}).get("port", 8080)
     web = StaticWebServer(port=web_port)
     web.start()
 
+    ws_port = settings.get("ws_server", {}).get("port", 8765)
     ws = WebSocketServer(window.broker, auth_store=auth_store,
-                         settings_store=settings_store, port=8765)
+                         settings_store=settings_store, port=ws_port)
     ws.start()
+
+    app.aboutToQuit.connect(web.stop)
+    app.aboutToQuit.connect(ws.stop)
 
     window.show()
     sys.exit(app.exec())

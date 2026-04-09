@@ -1,8 +1,33 @@
 // ---------- WebSocket ----------
+function cancelReconnect() {
+    if (_reconnectTimer) {
+        clearTimeout(_reconnectTimer);
+        _reconnectTimer = null;
+    }
+    _reconnectDelay = 0;
+    hideToast();
+}
+
+function scheduleReconnect() {
+    if (_manualDisconnect) return;
+    _reconnectDelay = _reconnectDelay ? Math.min(_reconnectDelay * 2, _RECONNECT_MAX_MS) : _RECONNECT_BASE_MS;
+    const secs = (_reconnectDelay / 1000).toFixed(0);
+    showToast(`Connection lost — reconnecting in ${secs}s…`);
+    log(`Reconnecting in ${secs}s…`, "info");
+    _reconnectTimer = setTimeout(() => {
+        _reconnectTimer = null;
+        connect();
+    }, _reconnectDelay);
+}
+
 function toggleConnection() {
     if (ws && ws.readyState <= WebSocket.OPEN) {
+        _manualDisconnect = true;
+        cancelReconnect();
         ws.close();
     } else {
+        _manualDisconnect = false;
+        cancelReconnect();
         connect();
     }
 }
@@ -15,6 +40,7 @@ function connect() {
     ws = new WebSocket(url);
 
     ws.addEventListener("open", () => {
+        cancelReconnect();
         setConnected(true);
         setAuthenticated(false, "Not authenticated");
         log("Connection established", "info");
@@ -31,6 +57,7 @@ function connect() {
     });
 
     ws.addEventListener("close", () => {
+        const hadSession = isAuthenticated || _wasAuthenticated;
         setConnected(false);
         setAuthenticated(false, "Not authenticated");
         setRole("-");
@@ -46,6 +73,10 @@ function connect() {
         document.getElementById("sidebar-overlay")?.classList.add("hidden");
         clearRenderedData(true);
         log("Connection closed", "info");
+        // Auto-reconnect if the connection was not manually closed
+        if (!_manualDisconnect && hadSession) {
+            scheduleReconnect();
+        }
     });
 
     ws.addEventListener("error", () => {
@@ -87,6 +118,8 @@ function handleMessage(payload) {
 
     if (payload.type === "auth") {
         if (payload.ok) {
+            _wasAuthenticated = true;
+            _reconnectDelay = 0;
             currentUsername = document.getElementById("ws-username").value.trim();
             setAuthenticated(true, "Authenticated");
             setRole(payload.role || "user");

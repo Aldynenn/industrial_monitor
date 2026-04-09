@@ -51,6 +51,14 @@ class WebSocketServer:
         asyncio.set_event_loop(self._loop)
         self._loop.run_until_complete(self._serve())
 
+    def stop(self):
+        """Gracefully shut down the WebSocket server."""
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread:
+            self._thread.join(timeout=3)
+            logger.info("WebSocket server stopped.")
+
     async def _serve(self):
         async with serve(self._handler, self._host, self._port):
             logger.info("WebSocket server listening on ws://%s:%s", self._host, self._port)

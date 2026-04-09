@@ -43,6 +43,14 @@ const chartInstances = {};
 
 let graphRedrawScheduled = false;
 
+// ---------- Reconnect state ----------
+let _reconnectTimer = null;
+let _reconnectDelay = 0;
+const _RECONNECT_BASE_MS = 1000;
+const _RECONNECT_MAX_MS = 30000;
+let _wasAuthenticated = false;   // true if we had a successful session before disconnect
+let _manualDisconnect = false;   // true when user clicks Disconnect
+
 // ---------- Packet interval tracking ----------
 let _lastPacketTime = null;
 let _packetIntervalSum = 0;
