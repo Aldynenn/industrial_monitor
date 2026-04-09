@@ -5,6 +5,29 @@ import threading
 from pathlib import Path
 
 _DEFAULTS_PATH = Path(__file__).with_name("defaults.json")
+
+_BUILTIN_DEFAULTS: dict = {
+    "plc": {
+        "ip_address": "192.168.0.1",
+        "rack": 0,
+        "slot": 1,
+        "polling_interval_ms": 20,
+    },
+    "logging": {
+        "enabled": False,
+        "output_file": "logs/plc_logs.log",
+        "include_header": True,
+    },
+    "web_server": {"port": 8080},
+    "ws_server": {"port": 8765},
+    "ws_visibility": {},
+}
+
+if not _DEFAULTS_PATH.exists():
+    _DEFAULTS_PATH.write_text(
+        json.dumps(_BUILTIN_DEFAULTS, indent=4), encoding="utf-8"
+    )
+
 DEFAULTS: dict = json.loads(_DEFAULTS_PATH.read_text(encoding="utf-8"))
 
 
