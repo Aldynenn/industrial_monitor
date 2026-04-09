@@ -17,3 +17,4 @@ datablocks_user.json
 *.log
 ws_visibility_config.json
 logging_settings.json
+settings.json
