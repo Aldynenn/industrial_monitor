@@ -323,6 +323,12 @@ try:
         def stop(self):
             self.auto_reconnect = False
             self._running = False
+            # Force-disconnect to interrupt any blocking snap7 read
+            try:
+                if self.plc:
+                    self.plc.disconnect()
+            except Exception:
+                pass
 
 except ImportError:
     pass

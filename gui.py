@@ -273,7 +273,10 @@ class MainWindow(QMainWindow):
     def _stop_worker_if_running(self):
         if self.worker is not None:
             self.worker.stop()
-            self.worker.wait(3000)
+            # Process events while waiting so the GUI stays responsive
+            if not self.worker.wait(500):
+                QApplication.processEvents()
+                self.worker.wait(3000)
 
     def _open_db_config_window(self):
         if self._db_config_window is None:
